@@ -156,6 +156,7 @@ INSERT INTO _unit_map (old_unit, new_unit, device_type, description) VALUES
     (40, 16,  'setpoint', 'Room temp setpoint'),
     
     -- kWh/Meter devices (stored in Meter table)
+    -- CRITICAL: These need sValue counter sync!
     (23, 30,  'kwh', 'Power total'),
     (24, 31,  'kwh', 'Power heating'),
     (25, 32,  'kwh', 'Power DHW'),
@@ -316,6 +317,64 @@ WHERE m.device_type = 'kwh'
   );
 
 SELECT 'Meter_Calendar records migrated: ' || changes() AS Result;
+
+-- ============================================================================
+-- CRITICAL: SYNC kWh DEVICE COUNTERS (DeviceStatus.sValue)
+-- ============================================================================
+-- For kWh devices with EnergyMeterMode='1' (Calculated), Domoticz stores the
+-- cumulative energy counter in sValue as "instant_power;cumulative_energy"
+-- 
+-- Without this sync, the new device has a fresh counter starting near 0,
+-- but the migrated Meter_Calendar data has counters in the millions.
+-- This causes Domoticz to calculate huge negative daily usage values.
+--
+-- We copy the sValue from old device to new device to continue the counter.
+-- ============================================================================
+
+SELECT '' AS '';
+SELECT '=== SYNCING kWh DEVICE COUNTERS ===' AS Info;
+
+-- Show before state
+SELECT 'Before sync:' AS '';
+SELECT 
+    m.description AS Device,
+    m.old_idx AS OldIdx,
+    m.new_idx AS NewIdx,
+    old_dev.sValue AS OldCounter,
+    new_dev.sValue AS NewCounter
+FROM _migration_map m
+INNER JOIN DeviceStatus old_dev ON old_dev.ID = m.old_idx
+INNER JOIN DeviceStatus new_dev ON new_dev.ID = m.new_idx
+WHERE m.device_type = 'kwh';
+
+-- Update new device sValue to match old device (continues the counter)
+UPDATE DeviceStatus
+SET sValue = (
+    SELECT old_dev.sValue 
+    FROM _migration_map m
+    INNER JOIN DeviceStatus old_dev ON old_dev.ID = m.old_idx
+    WHERE m.new_idx = DeviceStatus.ID
+      AND m.device_type = 'kwh'
+)
+WHERE ID IN (
+    SELECT new_idx FROM _migration_map WHERE device_type = 'kwh'
+);
+
+SELECT 'kWh device counters synced: ' || changes() AS Result;
+
+-- Show after state
+SELECT '' AS '';
+SELECT 'After sync:' AS '';
+SELECT 
+    m.description AS Device,
+    m.old_idx AS OldIdx,
+    m.new_idx AS NewIdx,
+    old_dev.sValue AS OldCounter,
+    new_dev.sValue AS NewCounter
+FROM _migration_map m
+INNER JOIN DeviceStatus old_dev ON old_dev.ID = m.old_idx
+INNER JOIN DeviceStatus new_dev ON new_dev.ID = m.new_idx
+WHERE m.device_type = 'kwh';
 
 -- ============================================================================
 -- MIGRATE PERCENTAGE DATA (includes Custom sensors - they use Percentage table!)

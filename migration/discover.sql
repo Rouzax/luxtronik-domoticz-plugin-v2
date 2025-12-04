@@ -97,6 +97,105 @@ ORDER BY d.Unit;
 SELECT '' AS '';
 
 -- ============================================================================
+-- UNIT ID MAPPING TABLE
+-- ============================================================================
+
+DROP TABLE IF EXISTS _unit_map;
+
+CREATE TEMPORARY TABLE _unit_map (
+    old_unit INTEGER PRIMARY KEY,
+    new_unit INTEGER,
+    device_type TEXT,
+    description TEXT
+);
+
+INSERT INTO _unit_map (old_unit, new_unit, device_type, description) VALUES
+    -- Temperature devices
+    (1,  60,  'temp', 'Heat supply temp'),
+    (2,  61,  'temp', 'Heat return temp'),
+    (3,  62,  'temp', 'Return temp target'),
+    (4,  90,  'temp', 'Outside temp'),
+    (5,  91,  'temp', 'Outside temp avg'),
+    (6,  80,  'temp', 'DHW temp'),
+    (8,  100, 'temp', 'Source inlet temp'),
+    (9,  101, 'temp', 'Source outlet temp'),
+    (10, 120, 'temp', 'Circuit 1 temp'),
+    (11, 121, 'temp', 'Circuit 1 target'),
+    (12, 130, 'temp', 'Circuit 2 temp'),
+    (13, 131, 'temp', 'Circuit 2 target'),
+    (21, 92,  'temp', 'Room temp'),
+    (22, 93,  'temp', 'Room temp target'),
+    (32, 160, 'temp', 'Hot gas temp'),
+    (33, 161, 'temp', 'Suction temp'),
+    -- Setpoint devices
+    (7,  15,  'setpoint', 'DHW temp target'),
+    (17, 14,  'setpoint', 'Temp adjust'),
+    (40, 16,  'setpoint', 'Room temp setpoint'),
+    -- kWh devices (need counter sync!)
+    (23, 30,  'kwh', 'Power total'),
+    (24, 31,  'kwh', 'Power heating'),
+    (25, 32,  'kwh', 'Power DHW'),
+    (26, 40,  'kwh', 'Heat out total'),
+    (27, 41,  'kwh', 'Heat out heating'),
+    (28, 42,  'kwh', 'Heat out DHW'),
+    -- Percentage devices
+    (30, 66,  'pct', 'Heating pump'),
+    (31, 105, 'pct', 'Source pump'),
+    -- Custom sensors (stored in Percentage table)
+    (19, 106, 'pct', 'Source flow'),
+    (20, 140, 'pct', 'Compressor freq'),
+    (29, 50,  'pct', 'COP total'),
+    (34, 165, 'pct', 'Superheat'),
+    (35, 166, 'pct', 'Pressure high'),
+    (36, 167, 'pct', 'Pressure low'),
+    (37, 102, 'pct', 'Source ΔT'),
+    (38, 63,  'pct', 'Heating ΔT'),
+    (41, 51,  'pct', 'COP heating'),
+    (42, 52,  'pct', 'COP DHW'),
+    -- Switch/Text devices
+    (16, 13,  'light', 'Cooling'),
+    (18, 1,   'light', 'Working mode'),
+    -- Selector switches
+    (14, 10,  'light', 'Heating mode'),
+    (15, 11,  'light', 'Hot water mode'),
+    (39, 12,  'light', 'DHW Power Mode');
+
+-- ============================================================================
+-- kWh DEVICE COUNTER COMPARISON (CRITICAL FOR MIGRATION!)
+-- ============================================================================
+-- For kWh devices, Domoticz stores cumulative energy in sValue as:
+--   "instant_power;cumulative_energy_wh"
+-- 
+-- After migration, the new device's counter MUST match the old device's
+-- counter, otherwise daily/monthly calculations will show huge negative values.
+-- ============================================================================
+
+SELECT '' AS '';
+SELECT '=== kWh DEVICE COUNTER COMPARISON (CRITICAL!) ===' AS Info;
+SELECT 'These counters must match after migration for correct graphs' AS Note;
+SELECT '' AS '';
+
+SELECT 
+    um.description AS Device,
+    um.old_unit AS OldU,
+    um.new_unit AS NewU,
+    old_dev.ID AS OldIdx,
+    new_dev.ID AS NewIdx,
+    old_dev.sValue AS OldCounter,
+    new_dev.sValue AS NewCounter,
+    CASE 
+        WHEN old_dev.sValue = new_dev.sValue THEN 'OK'
+        WHEN new_dev.sValue IS NULL THEN 'MISSING'
+        ELSE 'MISMATCH - will be fixed by migrate.sql'
+    END AS Status
+FROM _unit_map um
+INNER JOIN _hw_ids hw ON 1=1
+LEFT JOIN DeviceStatus old_dev ON old_dev.Unit = um.old_unit AND old_dev.HardwareID = hw.old_hw_id
+LEFT JOIN DeviceStatus new_dev ON new_dev.Unit = um.new_unit AND new_dev.HardwareID = hw.new_hw_id
+WHERE um.device_type = 'kwh'
+ORDER BY um.old_unit;
+
+-- ============================================================================
 -- HISTORICAL DATA COUNTS (what will be migrated)
 -- ============================================================================
 
@@ -120,8 +219,31 @@ LEFT JOIN (SELECT DeviceRowID, COUNT(*) AS cnt FROM LightingLog GROUP BY DeviceR
 WHERE (COALESCE(t.cnt, 0) + COALESCE(m.cnt, 0) + COALESCE(p.cnt, 0) + COALESCE(l.cnt, 0)) > 0
 ORDER BY d.Unit;
 
+-- ============================================================================
+-- CALENDAR DATA COUNTS
+-- ============================================================================
+
+SELECT '' AS '';
+SELECT '=== CALENDAR DATA TO MIGRATE ===' AS Info;
+
+SELECT 
+    d.ID AS Idx,
+    d.Unit,
+    SUBSTR(d.Name, 1, 25) AS Name,
+    COALESCE(tc.cnt, 0) AS TempCal,
+    COALESCE(mc.cnt, 0) AS MeterCal,
+    COALESCE(pc.cnt, 0) AS PctCal
+FROM DeviceStatus d
+INNER JOIN _hw_ids hw ON d.HardwareID = hw.old_hw_id
+LEFT JOIN (SELECT DeviceRowID, COUNT(*) AS cnt FROM Temperature_Calendar GROUP BY DeviceRowID) tc ON d.ID = tc.DeviceRowID
+LEFT JOIN (SELECT DeviceRowID, COUNT(*) AS cnt FROM Meter_Calendar GROUP BY DeviceRowID) mc ON d.ID = mc.DeviceRowID
+LEFT JOIN (SELECT DeviceRowID, COUNT(*) AS cnt FROM Percentage_Calendar GROUP BY DeviceRowID) pc ON d.ID = pc.DeviceRowID
+WHERE (COALESCE(tc.cnt, 0) + COALESCE(mc.cnt, 0) + COALESCE(pc.cnt, 0)) > 0
+ORDER BY d.Unit;
+
 SELECT '' AS '';
 SELECT '=== READY TO MIGRATE ===' AS Info;
 SELECT 'Run: sqlite3 domoticz.db < plugins/luxtronik-domoticz-plugin-v2/migration/migrate.sql' AS Command;
 
+DROP TABLE IF EXISTS _unit_map;
 DROP TABLE IF EXISTS _hw_ids;
