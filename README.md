@@ -90,7 +90,7 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
 ![Utility Devices](https://github.com/user-attachments/assets/2e36ea32-a578-4e54-835f-b9cfd6835e24)
 
 ### Temperature Devices
-![Temperature Devices](https://github.com/user-attachments/assets/2f9d1438-6702-4afe-9de3-2fe99d69ca8e)
+![Temperature Devices](https://github.com/user-attachments/assets/2f9d1438-6572-4afe-9de3-2fe99d69ca8e)
 
 ### Switch Devices
 ![Switch Devices](https://github.com/user-attachments/assets/fa9195f6-0780-49e6-961f-196bc92405cb)
