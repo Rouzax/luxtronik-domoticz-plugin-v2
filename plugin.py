@@ -1109,7 +1109,9 @@ class DeviceUpdateTracker:
             time_since = current_time - last_update
             if time_since >= self.GRAPH_UPDATE_INTERVAL:
                 self._last_update_times[device_id] = current_time
-                return True, "Interval update", ""
+                # Include current value in log for visibility
+                value_info = f"sValue: {new_values.get('sValue', current_svalue)}"
+                return True, "Interval update", value_info
             return False, f"Next update in {int(self.GRAPH_UPDATE_INTERVAL - time_since)}s", ""
         
         return False, "No changes", ""
