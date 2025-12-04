@@ -28,11 +28,6 @@ Add new hardware in Domoticz (Setup → Hardware) with a temporary name like "HP
 sqlite3 domoticz.db < plugins/luxtronik-domoticz-plugin-v2/migration/discover.sql
 ```
 
-This shows:
-- Device mappings (old unit → new unit)
-- **kWh counter comparison** (critical for correct graphs!)
-- Historical data counts to be migrated
-
 ### 4. Run migration
 
 ```bash
@@ -44,48 +39,28 @@ sudo systemctl start domoticz
 ### 5. Verify and cleanup
 
 1. Check graphs on new plugin devices show historical data
-2. **Important:** Verify kWh device monthly/yearly charts show correct values (not flat lines or negative values)
-3. Disable/delete the old plugin hardware entry
-4. Rename new hardware to your preferred name
+2. Disable/delete the old plugin hardware entry
+3. Rename new hardware to your preferred name
+
+## What gets migrated
+
+The migration script automatically handles:
+
+- **Temperature data** - All temperature sensor history and daily aggregates
+- **Meter data** - Energy consumption/production history (kWh devices)
+- **Percentage data** - Pump speeds, COP values, custom sensors
+- **Switch history** - Selector and switch state changes
+- **Energy counters** - Cumulative kWh counters are synced to continue seamlessly
+- **Hourly statistics** - KWHStats patterns are preserved
 
 ## How it works
 
-### Data Migration
-
-- **Auto-detects** both plugins by their plugin key (no manual configuration)
-- Uses **Unit ID mapping** (independent of device names or language)
+- **Auto-detects** both plugins by their plugin key (no manual configuration needed)
+- Uses **Unit ID mapping** (independent of device names or language settings)
 - Only migrates data **older than** new device's first entry (no duplicates)
-- Migrates: Temperature, Meter (kWh), Percentage, and LightingLog tables
-- Migrates both short-term data and Calendar (daily aggregate) data
+- Cleans up any artifacts from the new device running before migration
 
-### kWh Counter Synchronization (Critical!)
-
-For kWh devices (power consumption and heat output), Domoticz stores a cumulative energy counter in the device's `sValue` field:
-
-```
-sValue = "instant_power;cumulative_energy_wh"
-Example: "3500.0;2279919.35" = 3500W instant, 2,279,919 Wh cumulative
-```
-
-**Problem:** When a new device is created, its counter starts at 0. But migrated Calendar data has counters in the millions (Wh accumulated over months/years). When Domoticz calculates daily usage:
-
-```
-Today's counter:     2,278 Wh (new device, fresh start)
-Yesterday's counter: 2,233,455 Wh (from migrated data)
-Calculated usage:    -2,231,177 Wh  ← WRONG!
-```
-
-**Solution:** The migration script copies `sValue` from old devices to new devices, so the counter continues from where it left off:
-
-```
-Today's counter:     2,279,919 Wh (synced from old device)
-Yesterday's counter: 2,233,455 Wh (from migrated data)
-Calculated usage:    46,464 Wh  ← CORRECT!
-```
-
-### Unit ID Mapping
-
-The migration uses fixed Unit ID mapping (independent of language/device names):
+## Unit ID Mapping
 
 | Old Unit | New Unit | Type | Description |
 |:--------:|:--------:|------|-------------|
@@ -111,12 +86,12 @@ The migration uses fixed Unit ID mapping (independent of language/device names):
 | 20 | 140 | Custom | Compressor freq |
 | 21 | 92 | Temperature | Room temp |
 | 22 | 93 | Temperature | Room temp target |
-| **23** | **30** | **kWh** | **Power total** |
-| **24** | **31** | **kWh** | **Power heating** |
-| **25** | **32** | **kWh** | **Power DHW** |
-| **26** | **40** | **kWh** | **Heat out total** |
-| **27** | **41** | **kWh** | **Heat out heating** |
-| **28** | **42** | **kWh** | **Heat out DHW** |
+| 23 | 30 | kWh | Power total |
+| 24 | 31 | kWh | Power heating |
+| 25 | 32 | kWh | Power DHW |
+| 26 | 40 | kWh | Heat out total |
+| 27 | 41 | kWh | Heat out heating |
+| 28 | 42 | kWh | Heat out DHW |
 | 29 | 50 | Custom | COP total |
 | 30 | 66 | Percentage | Heating pump |
 | 31 | 105 | Percentage | Source pump |
@@ -132,44 +107,9 @@ The migration uses fixed Unit ID mapping (independent of language/device names):
 | 41 | 51 | Custom | COP heating |
 | 42 | 52 | Custom | COP DHW |
 
-**Bold** = kWh devices that require counter synchronization
-
-## Troubleshooting
-
-### Monthly/Yearly graphs show flat line at 0 or negative values
-
-This happens when the kWh counter wasn't synced. Run this SQL to check:
-
-```sql
--- Show kWh device counters for both plugins
-SELECT 
-    h.Extra AS Plugin,
-    d.ID AS Idx,
-    d.Name,
-    d.sValue
-FROM DeviceStatus d
-INNER JOIN Hardware h ON d.HardwareID = h.ID
-WHERE h.Extra IN ('luxtronik', 'luxtronikex')
-  AND d.Type = 243 AND d.SubType = 29
-ORDER BY d.Unit, h.Extra;
-```
-
-If new plugin devices show small counter values (< 10,000) while old devices show large values (> 1,000,000), run the migration script again to sync.
-
-### Manual counter sync (if needed)
-
-```sql
--- Example: Sync heat output heating counter
--- Replace OLD_IDX and NEW_IDX with actual device IDs
-
-UPDATE DeviceStatus 
-SET sValue = (SELECT sValue FROM DeviceStatus WHERE ID = OLD_IDX)
-WHERE ID = NEW_IDX;
-```
-
 ## Files
 
 | File | Description |
 |------|-------------|
-| `discover.sql` | Preview device mapping, counter comparison, and data counts |
-| `migrate.sql` | Perform data migration AND counter synchronization |
+| `discover.sql` | Preview device mapping and data counts before migration |
+| `migrate.sql` | Perform the full data migration |

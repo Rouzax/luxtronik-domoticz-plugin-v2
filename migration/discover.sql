@@ -195,6 +195,22 @@ LEFT JOIN DeviceStatus new_dev ON new_dev.Unit = um.new_unit AND new_dev.Hardwar
 WHERE um.device_type = 'kwh'
 ORDER BY um.old_unit;
 
+-- Check for KWHStats that will be copied
+SELECT '' AS '';
+SELECT '=== KWHStats CHECK ===' AS Info;
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN 'OK: ' || COUNT(*) || ' KWHStats entries found for old kWh devices - will be copied to new devices'
+        ELSE 'NOTE: No KWHStats entries for old kWh devices'
+    END AS Status
+FROM KWHStats k
+INNER JOIN _unit_map um ON 1=1
+INNER JOIN _hw_ids hw ON 1=1
+INNER JOIN DeviceStatus d ON d.ID = k.DeviceRowID 
+    AND d.Unit = um.old_unit 
+    AND d.HardwareID = hw.old_hw_id
+WHERE um.device_type = 'kwh';
+
 -- ============================================================================
 -- HISTORICAL DATA COUNTS (what will be migrated)
 -- ============================================================================

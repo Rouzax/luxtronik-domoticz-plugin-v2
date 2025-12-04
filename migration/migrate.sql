@@ -347,6 +347,45 @@ INNER JOIN DeviceStatus old_dev ON old_dev.ID = m.old_idx
 INNER JOIN DeviceStatus new_dev ON new_dev.ID = m.new_idx
 WHERE m.device_type = 'kwh';
 
+-- ============================================================================
+-- CRITICAL: Delete new plugin's pre-migration Meter records
+-- ============================================================================
+-- Before migration, the new plugin logged Meter records with counter values
+-- starting near 0. After we sync sValue to millions, Domoticz would calculate:
+--   Old record: Value = 2,278 (pre-migration)
+--   New sValue: 5,355,327 (synced)
+--   Calculated usage: 5,353,049 Wh  ← HUGE SPIKE!
+--
+-- Solution: Delete new plugin's Meter records that have low counter values.
+-- These are from before migration when the counter started fresh at 0.
+-- We use a threshold of 100,000 Wh - migrated data has values in millions.
+-- ============================================================================
+
+SELECT '' AS '';
+SELECT 'Cleaning pre-migration data (prevents spike artifacts)...' AS '';
+
+-- Delete short-term Meter records with low counter values
+DELETE FROM Meter 
+WHERE DeviceRowID IN (SELECT new_idx FROM _migration_map WHERE device_type = 'kwh')
+  AND Value < 100000;
+
+SELECT 'Pre-migration Meter records deleted: ' || changes() AS Result;
+
+-- Copy KWHStats from old devices to new devices
+-- KWHStats tracks hourly usage statistics and weekday patterns. Copying from
+-- the old device preserves historical patterns. This also overwrites any
+-- corrupted stats from the counter sync (which would show as a massive spike).
+INSERT OR REPLACE INTO KWHStats (DeviceRowID, Value, LastUpdate)
+SELECT 
+    m.new_idx,
+    k.Value,
+    k.LastUpdate
+FROM _migration_map m
+INNER JOIN KWHStats k ON k.DeviceRowID = m.old_idx
+WHERE m.device_type = 'kwh';
+
+SELECT 'KWHStats records copied: ' || changes() AS Result;
+
 -- Update new device sValue to match old device (continues the counter)
 UPDATE DeviceStatus
 SET sValue = (
