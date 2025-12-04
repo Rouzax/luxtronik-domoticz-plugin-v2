@@ -4,7 +4,7 @@
 
 The Luxtronik plugin for Domoticz provides socket communication with Luxtronik-based heat pump controllers. Built on the **DomoticzEx framework**, this version features multi-instance support, intelligent COP tracking with steady-state gating, robust security with write protection, and comprehensive multi-language support. Building on the work of [ajarzyn](https://github.com/ajarzyn/domoticz-luxtronic2), this refactored version brings enhanced reliability and maintainability.
 
-Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?p=329027)
+Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?p=44176)
 
 ## Features
 
@@ -80,6 +80,22 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
    - Add a new hardware device and select **Luxtronik Heat Pump Controller v2**
    - Enter the configuration details
    - Click **Add**
+  
+## Screenshots
+
+<details>
+<summary>Click to expand screenshots</summary>
+
+### Utility Devices
+![Utility Devices](https://github.com/user-attachments/assets/2e36ea32-a578-4e54-835f-b9cfd6835e24)
+
+### Temperature Devices
+![Temperature Devices](https://github.com/user-attachments/assets/2f9d1438-6702-4afe-9de3-2fe99d69ca8e)
+
+### Switch Devices
+![Switch Devices](https://github.com/user-attachments/assets/fa9195f6-0780-49e6-961f-196bc92405cb)
+
+</details>
 
 ## Configuration
 
