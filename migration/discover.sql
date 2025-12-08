@@ -1,9 +1,16 @@
 -- ============================================================================
 -- Luxtronik Plugin Migration - Discovery Script
 -- ============================================================================
--- Run this to verify plugin detection and preview the migration mapping
+-- This script previews what will be migrated from the legacy plugin (v1.x)
+-- to the new DomoticzEx plugin (v2.x). It's read-only and makes no changes.
 -- 
--- Usage: sqlite3 domoticz.db < plugins/luxtronik-domoticz-plugin-v2/migration/discover.sql
+-- Usage: sqlite3 domoticz.db < migration/discover.sql
+--
+-- What migrate.sql will do:
+--   ✓ Copy all historical data (temperatures, meters, percentages)
+--   ✓ Sync energy counters to preserve "Today/Week/Month" calculations
+--   ✓ Transfer calendar data for long-term graphs
+--   ✓ Copy KWHStats for usage pattern analysis
 -- ============================================================================
 
 .headers on
@@ -161,18 +168,21 @@ INSERT INTO _unit_map (old_unit, new_unit, device_type, description) VALUES
     (39, 12,  'light', 'DHW Power Mode');
 
 -- ============================================================================
--- kWh DEVICE COUNTER COMPARISON (CRITICAL FOR MIGRATION!)
+-- kWh DEVICE COUNTER COMPARISON
 -- ============================================================================
 -- For kWh devices, Domoticz stores cumulative energy in sValue as:
 --   "instant_power;cumulative_energy_wh"
 -- 
--- After migration, the new device's counter MUST match the old device's
--- counter, otherwise daily/monthly calculations will show huge negative values.
+-- The migrate.sql script automatically handles:
+--   ✓ Syncing counters from old to new devices
+--   ✓ Copying historical Meter and Meter_Calendar data
+--   ✓ Transferring KWHStats for usage patterns
+--   ✓ Aligning counters with calendar data (prevents negative "Today" values)
 -- ============================================================================
 
 SELECT '' AS '';
-SELECT '=== kWh DEVICE COUNTER COMPARISON (CRITICAL!) ===' AS Info;
-SELECT 'These counters must match after migration for correct graphs' AS Note;
+SELECT '=== kWh DEVICE COUNTER STATUS ===' AS Info;
+SELECT 'migrate.sql will sync these counters automatically' AS Note;
 SELECT '' AS '';
 
 SELECT 
@@ -181,13 +191,16 @@ SELECT
     um.new_unit AS NewU,
     old_dev.ID AS OldIdx,
     new_dev.ID AS NewIdx,
-    old_dev.sValue AS OldCounter,
-    new_dev.sValue AS NewCounter,
+    SUBSTR(old_dev.sValue, INSTR(old_dev.sValue, ';') + 1) AS OldEnergy_Wh,
     CASE 
-        WHEN old_dev.sValue = new_dev.sValue THEN 'OK'
-        WHEN new_dev.sValue IS NULL THEN 'MISSING'
-        ELSE 'MISMATCH - will be fixed by migrate.sql'
-    END AS Status
+        WHEN new_dev.sValue IS NULL THEN '(device missing)'
+        ELSE SUBSTR(new_dev.sValue, INSTR(new_dev.sValue, ';') + 1)
+    END AS NewEnergy_Wh,
+    CASE 
+        WHEN old_dev.sValue = new_dev.sValue THEN 'Already synced'
+        WHEN new_dev.sValue IS NULL THEN 'New device needed'
+        ELSE 'Will be synced'
+    END AS Action
 FROM _unit_map um
 INNER JOIN _hw_ids hw ON 1=1
 LEFT JOIN DeviceStatus old_dev ON old_dev.Unit = um.old_unit AND old_dev.HardwareID = hw.old_hw_id
@@ -197,11 +210,11 @@ ORDER BY um.old_unit;
 
 -- Check for KWHStats that will be copied
 SELECT '' AS '';
-SELECT '=== KWHStats CHECK ===' AS Info;
+SELECT '=== KWHStats (Usage Patterns) ===' AS Info;
 SELECT 
     CASE 
-        WHEN COUNT(*) > 0 THEN 'OK: ' || COUNT(*) || ' KWHStats entries found for old kWh devices - will be copied to new devices'
-        ELSE 'NOTE: No KWHStats entries for old kWh devices'
+        WHEN COUNT(*) > 0 THEN 'Found ' || COUNT(*) || ' entries - will be copied to preserve usage patterns'
+        ELSE 'No KWHStats entries (this is normal for newer installations)'
     END AS Status
 FROM KWHStats k
 INNER JOIN _unit_map um ON 1=1
@@ -212,11 +225,11 @@ INNER JOIN DeviceStatus d ON d.ID = k.DeviceRowID
 WHERE um.device_type = 'kwh';
 
 -- ============================================================================
--- HISTORICAL DATA COUNTS (what will be migrated)
+-- HISTORICAL DATA SUMMARY
 -- ============================================================================
 
 SELECT '' AS '';
-SELECT '=== HISTORICAL DATA TO MIGRATE ===' AS Info;
+SELECT '=== Short-term Data (will be migrated) ===' AS Info;
 
 SELECT 
     d.ID AS Idx,
@@ -236,11 +249,11 @@ WHERE (COALESCE(t.cnt, 0) + COALESCE(m.cnt, 0) + COALESCE(p.cnt, 0) + COALESCE(l
 ORDER BY d.Unit;
 
 -- ============================================================================
--- CALENDAR DATA COUNTS
+-- CALENDAR DATA SUMMARY
 -- ============================================================================
 
 SELECT '' AS '';
-SELECT '=== CALENDAR DATA TO MIGRATE ===' AS Info;
+SELECT '=== Calendar Data (will be migrated) ===' AS Info;
 
 SELECT 
     d.ID AS Idx,
@@ -258,8 +271,13 @@ WHERE (COALESCE(tc.cnt, 0) + COALESCE(mc.cnt, 0) + COALESCE(pc.cnt, 0)) > 0
 ORDER BY d.Unit;
 
 SELECT '' AS '';
-SELECT '=== READY TO MIGRATE ===' AS Info;
-SELECT 'Run: sqlite3 domoticz.db < plugins/luxtronik-domoticz-plugin-v2/migration/migrate.sql' AS Command;
+SELECT '=== DISCOVERY COMPLETE ===' AS Info;
+SELECT '' AS '';
+SELECT 'Ready to migrate! Follow these steps:' AS NextSteps;
+SELECT '  1. Stop Domoticz:  sudo systemctl stop domoticz' AS Step1;
+SELECT '  2. Backup database: cp domoticz.db domoticz.db.backup' AS Step2;
+SELECT '  3. Run migration:  sqlite3 domoticz.db < migration/migrate.sql' AS Step3;
+SELECT '  4. Start Domoticz: sudo systemctl start domoticz' AS Step4;
 
 DROP TABLE IF EXISTS _unit_map;
 DROP TABLE IF EXISTS _hw_ids;
