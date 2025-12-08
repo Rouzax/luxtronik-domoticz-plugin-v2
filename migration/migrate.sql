@@ -203,50 +203,38 @@ SELECT
     um.old_unit,
     um.new_unit,
     um.device_type,
-    um.description,
-    old_dev.Name AS old_name,
-    new_dev.Name AS new_name
+    um.description
 FROM _unit_map um
 INNER JOIN _hw_ids hw ON 1=1
-INNER JOIN DeviceStatus old_dev ON old_dev.Unit = um.old_unit AND old_dev.HardwareID = hw.old_hw_id
-INNER JOIN DeviceStatus new_dev ON new_dev.Unit = um.new_unit AND new_dev.HardwareID = hw.new_hw_id;
-
--- ============================================================================
--- Show mapping for verification
--- ============================================================================
+LEFT JOIN DeviceStatus old_dev ON old_dev.Unit = um.old_unit AND old_dev.HardwareID = hw.old_hw_id
+LEFT JOIN DeviceStatus new_dev ON new_dev.Unit = um.new_unit AND new_dev.HardwareID = hw.new_hw_id
+WHERE old_dev.ID IS NOT NULL AND new_dev.ID IS NOT NULL;
 
 SELECT '' AS '';
-SELECT '=== DEVICE MAPPING (Unit ID based) ===' AS Info;
+SELECT '=== DEVICE MAPPING ===' AS Info;
 
 SELECT 
-    old_idx AS OldIdx, 
-    new_idx AS NewIdx, 
-    old_unit AS OldU, 
-    new_unit AS NewU, 
-    device_type AS Type, 
+    old_unit AS OldU,
+    new_unit AS NewU,
+    old_idx AS OldIdx,
+    new_idx AS NewIdx,
+    device_type AS Type,
     description AS Description
-FROM _migration_map 
+FROM _migration_map
 ORDER BY old_unit;
 
-SELECT '' AS '';
-SELECT 'Devices to migrate: ' || COUNT(*) AS Summary FROM _migration_map;
-SELECT '' AS '';
-
 -- ============================================================================
--- MIGRATE TEMPERATURE DATA (temp + setpoint devices)
+-- MIGRATE TEMPERATURE DATA
 -- ============================================================================
 
+SELECT '' AS '';
 SELECT '=== MIGRATING TEMPERATURE DATA ===' AS Info;
 
+-- Short-term data (Temperature table)
 INSERT OR IGNORE INTO Temperature (DeviceRowID, Temperature, Chill, Humidity, Barometer, DewPoint, SetPoint, Date)
 SELECT 
     m.new_idx,
-    t.Temperature,
-    t.Chill,
-    t.Humidity,
-    t.Barometer,
-    t.DewPoint,
-    t.SetPoint,
+    t.Temperature, t.Chill, t.Humidity, t.Barometer, t.DewPoint, t.SetPoint,
     t.Date
 FROM Temperature t
 INNER JOIN _migration_map m ON t.DeviceRowID = m.old_idx
@@ -258,15 +246,12 @@ WHERE m.device_type IN ('temp', 'setpoint')
 
 SELECT 'Temperature records migrated: ' || changes() AS Result;
 
-INSERT OR IGNORE INTO Temperature_Calendar (
-    DeviceRowID, Temp_Min, Temp_Max, Temp_Avg, 
-    Chill_Min, Chill_Max, Humidity, Barometer, DewPoint,
-    SetPoint_Min, SetPoint_Max, SetPoint_Avg, Date
-)
+-- Calendar data (Temperature_Calendar table)
+INSERT OR IGNORE INTO Temperature_Calendar (DeviceRowID, Temp_Min, Temp_Max, Temp_Avg, Chill_Min, Chill_Max, Humidity, Barometer, DewPoint, SetPoint_Min, SetPoint_Max, SetPoint_Avg, Date)
 SELECT 
     m.new_idx,
-    tc.Temp_Min, tc.Temp_Max, tc.Temp_Avg,
-    tc.Chill_Min, tc.Chill_Max, tc.Humidity, tc.Barometer, tc.DewPoint,
+    tc.Temp_Min, tc.Temp_Max, tc.Temp_Avg, tc.Chill_Min, tc.Chill_Max,
+    tc.Humidity, tc.Barometer, tc.DewPoint,
     tc.SetPoint_Min, tc.SetPoint_Max, tc.SetPoint_Avg,
     tc.Date
 FROM Temperature_Calendar tc
@@ -401,9 +386,9 @@ WHERE ID IN (
 
 SELECT 'kWh device counters synced: ' || changes() AS Result;
 
--- Show after state
+-- Show after sync state
 SELECT '' AS '';
-SELECT 'After sync:' AS '';
+SELECT 'After counter sync:' AS '';
 SELECT 
     m.description AS Device,
     m.old_idx AS OldIdx,
@@ -413,6 +398,96 @@ SELECT
 FROM _migration_map m
 INNER JOIN DeviceStatus old_dev ON old_dev.ID = m.old_idx
 INNER JOIN DeviceStatus new_dev ON new_dev.ID = m.new_idx
+WHERE m.device_type = 'kwh';
+
+-- ============================================================================
+-- CRITICAL: ALIGN sValue COUNTER WITH Meter_Calendar
+-- ============================================================================
+-- Meter_Calendar stores integer Counter values (rounded), while sValue stores
+-- precise float values. If the old plugin's sValue has a fractional counter
+-- that is LOWER than the latest Meter_Calendar.Counter, Domoticz calculates:
+--
+--   Today = Current_sValue - Latest_Calendar_Counter
+--   Today = 196884.7379 - 196885 = -0.26 Wh → "-0.000 kWh"
+--
+-- This happens with split meters (power_heating, heat_out_heating) that only
+-- accumulate during specific operating modes. When the mode is inactive, the
+-- counter doesn't increase, but the Calendar might have a rounded-up value.
+--
+-- Solution: Ensure sValue counter >= latest Meter_Calendar counter
+-- ============================================================================
+
+SELECT '' AS '';
+SELECT '=== ALIGNING COUNTERS WITH CALENDAR DATA ===' AS Info;
+
+-- Show devices that need alignment
+SELECT 'Checking for counter/calendar misalignment...' AS '';
+
+SELECT 
+    m.description AS Device,
+    m.new_idx AS Idx,
+    CAST(SUBSTR(d.sValue, INSTR(d.sValue, ';') + 1) AS REAL) AS sValueCounter,
+    mc.Counter AS CalendarCounter,
+    CASE 
+        WHEN CAST(SUBSTR(d.sValue, INSTR(d.sValue, ';') + 1) AS REAL) < mc.Counter 
+        THEN 'NEEDS FIX (sValue < Calendar)'
+        ELSE 'OK'
+    END AS Status
+FROM _migration_map m
+INNER JOIN DeviceStatus d ON d.ID = m.new_idx
+LEFT JOIN (
+    SELECT DeviceRowID, Counter 
+    FROM Meter_Calendar mc1
+    WHERE Date = (SELECT MAX(Date) FROM Meter_Calendar mc2 WHERE mc2.DeviceRowID = mc1.DeviceRowID)
+) mc ON mc.DeviceRowID = m.new_idx
+WHERE m.device_type = 'kwh';
+
+-- Fix: Update sValue counter to match Calendar counter where sValue < Calendar
+-- Format: "instant_power;cumulative_energy" -> "0.0;calendar_counter.0"
+UPDATE DeviceStatus
+SET sValue = '0.0;' || (
+    SELECT CAST(mc.Counter AS TEXT) || '.0'
+    FROM Meter_Calendar mc
+    WHERE mc.DeviceRowID = DeviceStatus.ID
+    ORDER BY mc.Date DESC
+    LIMIT 1
+)
+WHERE ID IN (
+    SELECT m.new_idx 
+    FROM _migration_map m
+    WHERE m.device_type = 'kwh'
+)
+AND CAST(SUBSTR(sValue, INSTR(sValue, ';') + 1) AS REAL) < (
+    SELECT mc.Counter 
+    FROM Meter_Calendar mc 
+    WHERE mc.DeviceRowID = DeviceStatus.ID 
+    ORDER BY mc.Date DESC 
+    LIMIT 1
+);
+
+SELECT 'sValue counters aligned with calendar: ' || changes() AS Result;
+
+-- Show final state
+SELECT '' AS '';
+SELECT 'Final counter state:' AS '';
+
+SELECT 
+    m.description AS Device,
+    m.new_idx AS Idx,
+    d.sValue AS FinalCounter,
+    mc.Counter AS CalendarCounter,
+    CASE 
+        WHEN CAST(SUBSTR(d.sValue, INSTR(d.sValue, ';') + 1) AS REAL) >= mc.Counter 
+        THEN 'OK'
+        ELSE 'ERROR'
+    END AS Status
+FROM _migration_map m
+INNER JOIN DeviceStatus d ON d.ID = m.new_idx
+LEFT JOIN (
+    SELECT DeviceRowID, Counter 
+    FROM Meter_Calendar mc1
+    WHERE Date = (SELECT MAX(Date) FROM Meter_Calendar mc2 WHERE mc2.DeviceRowID = mc1.DeviceRowID)
+) mc ON mc.DeviceRowID = m.new_idx
 WHERE m.device_type = 'kwh';
 
 -- ============================================================================
