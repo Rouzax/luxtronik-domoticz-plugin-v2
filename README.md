@@ -103,6 +103,7 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
 |-----------------|-----------------------------------------------------|-------------|
 | Address         | IP address of the Luxtronik controller              | `127.0.0.1` |
 | Port            | TCP port of the controller                          | `8889`      |
+| Max COP Value   | Maximum COP to accept; higher values are discarded as measurement artifacts. Leave empty to disable | `30`        |
 | Update Interval | Data update interval in seconds (clamped to 10-60) | `20`        |
 | Language        | Interface language                                  | `English`   |
 | Debug Level     | Debug log level for troubleshooting                 | `None`      |
@@ -380,6 +381,7 @@ Device names only update automatically if they match a known translation. User-c
 1. Enable "Only add newly received values" in Domoticz settings
 2. Ensure you're looking at periods when the heat pump was actively running
 3. COP is only logged during steady-state operation (compressor at target speed)
+4. Adjust the Max COP Value setting if legitimate readings are being filtered (default 30), or leave it empty to disable filtering
 
 ### Write Commands Not Working
 The plugin validates all write operations against an allowlist. Check the debug log for "WRITE BLOCKED" messages. Only the control devices (units 10-16) support write operations.
@@ -430,6 +432,14 @@ sudo systemctl start domoticz
 - Translations use `spec_id` as the lookup key
 
 ## Changelog
+
+### Version 2.0.1
+- Single-connection refactor: heartbeat reads (READ_CALCUL + READ_PARAMS) now share one TCP connection instead of two separate connect/close cycles
+- Configurable max COP limit to filter transient measurement spikes
+- Fixed TCP partial read vulnerability in socket communication (`_recv_exact`)
+- Fixed retry logic: MAX_RETRIES=1 actually meant zero retries (now MAX_ATTEMPTS=2)
+- Clean up `_unit_specs` on plugin stop for consistent teardown
+- Removed dead `onCommand` pass-through (DomoticzEx dispatches to Unit directly)
 
 ### Version 2.0.0
 - **Breaking:** New plugin key `luxtronikex` (allows side-by-side installation with legacy)

@@ -2,7 +2,7 @@
 Luxtronik Heat Pump Controller Plugin v2 - Refactored for DomoticzEx Framework
 Author: Rouzax, 2025 (Refactored)
 
-<plugin key="luxtronikex" name="Luxtronik Heat Pump Controller v2" author="Rouzax" version="2.0.0">
+<plugin key="luxtronikex" name="Luxtronik Heat Pump Controller v2" author="Rouzax" version="2.0.1">
     <description>
         <h2>Luxtronik Heat Pump Controller Plugin</h2><br/>
         <p>This plugin connects to Luxtronik-based heat pump controllers using socket communication.</p>
@@ -40,6 +40,9 @@ Author: Rouzax, 2025 (Refactored)
         </param>
         <param field="Port" label="Heat Pump Port" width="60px" required="true" default="8889">
             <description>TCP port of your Luxtronik controller (default: 8889)</description>
+        </param>
+        <param field="Mode1" label="Max COP Value" width="75px" required="false" default="30">
+            <description>Maximum COP value to accept. Readings above this are discarded as measurement artifacts. Leave empty to disable filtering.</description>
         </param>
         <param field="Mode2" label="Update Interval" width="150px" required="true" default="20">
             <description>Data update interval in seconds (will be clamped to 10-60)</description>
@@ -596,11 +599,16 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
     3. Compressor must be at steady-state: actual_freq >= min_target_freq
     4. Power input must be above noise threshold (10W)
     5. Heat output must be above noise threshold (100W)
+    6. Calculated COP must not exceed max_cop limit (configurable)
     """
     
     # Noise thresholds - minimal values to filter measurement noise
     MIN_POWER_INPUT_W = 10.0
     MIN_HEAT_OUTPUT_W = 100.0
+    
+    def __init__(self):
+        """Initialize with no max COP limit (set from plugin parameters at startup)."""
+        self.max_cop: Optional[float] = None
     
     def convert(self, data_store: DataStore, command: str, address: int, config: List) -> GatedResult:
         """Calculate COP only during steady-state operation in allowed modes.
@@ -653,6 +661,11 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
             
             # Calculate and return COP
             cop = heat_output / power_input
+            
+            # Gate 5: Max COP sanity check - filter transient spikes
+            if self.max_cop is not None and cop > self.max_cop:
+                return (None, f"COP {cop:.2f} exceeds max limit ({self.max_cop:.1f})")
+            
             return ({'nValue': 0, 'sValue': f"{cop:.2f}"}, None)
             
         except (IndexError, TypeError, ZeroDivisionError) as e:
@@ -1132,7 +1145,7 @@ class ConnectionManager:
     """
     
     TIMEOUT = 5
-    MAX_RETRIES = 1
+    MAX_ATTEMPTS = 2  # 1 initial attempt + 1 retry
     
     def __init__(self, host: str, port: int):
         self.host = host
@@ -1182,6 +1195,24 @@ class ConnectionManager:
                 pass
             self._socket = None
     
+    def _recv_exact(self, num_bytes: int) -> bytes:
+        """Receive exactly num_bytes from the socket.
+        
+        TCP does not guarantee that recv() returns all requested bytes in a
+        single call. This method loops until the full payload is received,
+        preventing silent data corruption from partial reads.
+        
+        Raises:
+            socket.error: If the connection is closed before all bytes arrive
+        """
+        data = b''
+        while len(data) < num_bytes:
+            chunk = self._socket.recv(num_bytes - len(data))
+            if not chunk:
+                raise socket.error("Connection closed during receive")
+            data += chunk
+        return data
+    
     def send_command(self, command: int, address: int = 0, value: int = 0) -> Optional[Tuple[int, int, int, List[int]]]:
         """Send a command and receive response.
         
@@ -1212,7 +1243,7 @@ class ConnectionManager:
                 self._socket.send(struct.pack('!i', value))
             
             # Verify command echo
-            received = struct.unpack('!i', self._socket.recv(4))[0]
+            received = struct.unpack('!i', self._recv_exact(4))[0]
             if received != command:
                 raise Exception(f"Command verification failed: sent {command}, received {received}")
             
@@ -1222,13 +1253,13 @@ class ConnectionManager:
             data_list = []
             
             if command == SocketCommand.READ_PARAMS:
-                length = struct.unpack('!i', self._socket.recv(4))[0]
+                length = struct.unpack('!i', self._recv_exact(4))[0]
             elif command == SocketCommand.READ_CALCUL:
-                stat = struct.unpack('!i', self._socket.recv(4))[0]
-                length = struct.unpack('!i', self._socket.recv(4))[0]
+                stat = struct.unpack('!i', self._recv_exact(4))[0]
+                length = struct.unpack('!i', self._recv_exact(4))[0]
             
             if length > 0:
-                data_list = [struct.unpack('!i', self._socket.recv(4))[0] for _ in range(length)]
+                data_list = [struct.unpack('!i', self._recv_exact(4))[0] for _ in range(length)]
             
             _logger.log(f"{SocketCommand.get_name(command)}: Received {length} values", DebugLevel.COMMS)
             return command, stat, length, data_list
@@ -1241,8 +1272,12 @@ class ConnectionManager:
             return None
     
     def execute_with_retry(self, command: int, address: int = 0, value: int = 0) -> Tuple[int, int, int, List[int]]:
-        """Execute a command with retry logic."""
-        for attempt in range(self.MAX_RETRIES):
+        """Execute a single command with retry logic.
+        
+        Opens a connection, sends one command, then closes. Used for
+        single-command operations like writes.
+        """
+        for attempt in range(self.MAX_ATTEMPTS):
             try:
                 if self.connect():
                     result = self.send_command(command, address, value)
@@ -1254,8 +1289,50 @@ class ConnectionManager:
             finally:
                 self.close()
         
-        _logger.error(f"Command failed after {self.MAX_RETRIES} attempts")
+        _logger.error(f"Command failed after {self.MAX_ATTEMPTS} attempts")
         return command, 0, 0, []
+    
+    def execute_batch_with_retry(self, commands: List[Tuple[int, int, int]]) -> Dict[int, Tuple[int, int, int, List[int]]]:
+        """Execute multiple commands on a single connection with retry logic.
+        
+        The Luxtronik controller supports sequential commands on one TCP
+        connection. This avoids redundant TCP handshakes when multiple
+        read commands are needed (e.g., READ_CALCUL + READ_PARAMS).
+        
+        Args:
+            commands: List of (command, address, value) tuples to execute.
+            
+        Returns:
+            Dict mapping command code to its (command, stat, length, data_list)
+            result. Failed commands are omitted from the dict.
+        """
+        for attempt in range(self.MAX_ATTEMPTS):
+            try:
+                if not self.connect():
+                    continue
+                
+                results: Dict[int, Tuple[int, int, int, List[int]]] = {}
+                all_ok = True
+                
+                for command, address, value in commands:
+                    result = self.send_command(command, address, value)
+                    if result:
+                        results[command] = result
+                    else:
+                        all_ok = False
+                        break  # Connection likely broken, retry from scratch
+                
+                if all_ok:
+                    return results
+                    
+            except socket.error as e:
+                if attempt == 0:
+                    _logger.log(f"Socket error during batch (retrying): {type(e).__name__}: {e}", DebugLevel.COMMS)
+            finally:
+                self.close()
+        
+        _logger.error(f"Batch command failed after {self.MAX_ATTEMPTS} attempts")
+        return {}
 
 
 # =============================================================================
@@ -2673,6 +2750,9 @@ class LuxtronikPlugin:
         Fetches all command data first into a shared data_store, then updates
         devices. This allows gated converters to access data from other commands
         (e.g., compressor frequency from READ_CALCUL for steady-state checks).
+        
+        Uses a single TCP connection for all read commands to avoid redundant
+        handshakes (the Luxtronik controller supports sequential commands).
         """
         _logger.log("Full update starting", DebugLevel.VERBOSE)
         
@@ -2682,20 +2762,22 @@ class LuxtronikPlugin:
             'READ_PARAMS': SocketCommand.READ_PARAMS,
         }
         
-        # Phase 1: Fetch all command data into shared store
+        # Phase 1: Fetch all command data on a single connection
+        batch = [(code, 0, 0) for code in command_codes.values()]
+        batch_results = self.connection.execute_batch_with_retry(batch)
+        
         data_store: DataStore = {}
-        for command, code in command_codes.items():
-            try:
-                result = self.connection.execute_with_retry(code)
+        for command_name, code in command_codes.items():
+            result = batch_results.get(code)
+            if result:
                 _, _, length, data_list = result
-                
                 if length > 0:
-                    data_store[command] = data_list
-                    _logger.log(f"Fetched {command}: {length} values", DebugLevel.VERBOSE)
+                    data_store[command_name] = data_list
+                    _logger.log(f"Fetched {command_name}: {length} values", DebugLevel.VERBOSE)
                 else:
-                    _logger.log(f"No data received for {command}", DebugLevel.COMMS)
-            except Exception as e:
-                _logger.error(f"Error fetching {command}", exc=e)
+                    _logger.log(f"No data received for {command_name}", DebugLevel.COMMS)
+            else:
+                _logger.log(f"No result for {command_name}", DebugLevel.COMMS)
         
         # Phase 2: Update devices with shared data store
         for command in command_codes.keys():
@@ -2726,6 +2808,36 @@ class LuxtronikPlugin:
             )
             return ConfigLimits.HEARTBEAT_MAX
         return requested
+    
+    def _configure_max_cop(self, raw_value: str) -> None:
+        """Parse and apply the max COP limit to the COP converter.
+        
+        Args:
+            raw_value: String from Parameters['Mode1']. 
+                       Empty string or '0' disables filtering.
+                       Positive float sets the upper COP limit.
+        """
+        raw_value = raw_value.strip()
+        
+        if not raw_value or raw_value == '0':
+            DeviceFactory._cop_converter.max_cop = None
+            _logger.log("Max COP filter: disabled", DebugLevel.BASIC)
+            return
+        
+        try:
+            max_cop = float(raw_value)
+            if max_cop <= 0:
+                DeviceFactory._cop_converter.max_cop = None
+                _logger.log("Max COP filter: disabled (non-positive value)", DebugLevel.BASIC)
+            else:
+                DeviceFactory._cop_converter.max_cop = max_cop
+                _logger.log(f"Max COP filter: enabled at {max_cop:.1f}", DebugLevel.BASIC)
+        except ValueError:
+            DeviceFactory._cop_converter.max_cop = None
+            _logger.warning(
+                f"Invalid Max COP value '{raw_value}', filter disabled. "
+                f"Expected a positive number."
+            )
     
     def _check_cop_logging_setting(self) -> None:
         """Check and warn if COP logging setting is not optimal.
@@ -2809,6 +2921,9 @@ class LuxtronikPlugin:
             Domoticz.Heartbeat(heartbeat)
             _logger.log(f"Heartbeat set to {heartbeat}s", DebugLevel.BASIC)
             
+            # Configure max COP limit
+            self._configure_max_cop(Parameters.get('Mode1', '30'))
+            
             # Create devices (this also initializes available_writes)
             self.create_devices()
             
@@ -2834,7 +2949,7 @@ class LuxtronikPlugin:
     
     def onStop(self) -> None:
         """Clean up plugin resources."""
-        global _plugin_ref
+        global _plugin_ref, _unit_specs
         
         _logger.log("Plugin stopping", DebugLevel.BASIC)
         
@@ -2843,8 +2958,9 @@ class LuxtronikPlugin:
             self.connection.disable_writes()
             self.connection.close()
         
-        # Clear global reference
+        # Clear global references
         _plugin_ref = None
+        _unit_specs.clear()
         
         _logger.log("Plugin stopped", DebugLevel.BASIC)
     
@@ -2852,13 +2968,6 @@ class LuxtronikPlugin:
         """Handle periodic updates."""
         _logger.log("Heartbeat triggered", DebugLevel.VERBOSE)
         self.update_all()
-    
-    def onCommand(self, DeviceID: str, Unit: int, Command: str, Level: int, Hue: int) -> None:
-        """Handle commands from Domoticz."""
-        _logger.log(f"Command: DeviceID={DeviceID}, Unit={Unit}, Command={Command}, Level={Level}",
-                   DebugLevel.COMMS)
-        
-        # Commands are handled by the Unit's onCommand method through DomoticzEx
 
 
 # =============================================================================
@@ -2877,7 +2986,3 @@ def onStop():
 
 def onHeartbeat():
     _plugin.onHeartbeat()
-
-
-def onCommand(DeviceID, Unit, Command, Level, Hue):
-    _plugin.onCommand(DeviceID, Unit, Command, Level, Hue)
