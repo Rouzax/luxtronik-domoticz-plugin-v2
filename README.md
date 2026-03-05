@@ -433,6 +433,9 @@ sudo systemctl start domoticz
 
 ## Changelog
 
+### Version 2.0.2
+- Temperature difference devices (heating ΔT, brine ΔT) now also update during passive cooling
+
 ### Version 2.0.1
 - Single-connection refactor: heartbeat reads (READ_CALCUL + READ_PARAMS) now share one TCP connection instead of two separate connect/close cycles
 - Configurable max COP limit to filter transient measurement spikes
