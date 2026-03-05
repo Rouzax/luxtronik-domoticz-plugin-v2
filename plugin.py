@@ -752,11 +752,18 @@ class GatedTempDiffConverter(SteadyStateGateMixin, DataConverter):
     """
     
     def convert(self, data_store: DataStore, command: str, indices: List[int], divider: float) -> GatedResult:
-        # Check steady-state gate first
-        gate_reason = self.check_steady_state(data_store)
-        if gate_reason:
-            return (None, gate_reason)
-        
+        # Allow updates during passive cooling (pumps running, ΔT is meaningful)
+        calc_data = data_store.get('READ_CALCUL', [])
+        passive_cooling = (
+            len(calc_data) > LuxtronikAddress.PASSIVE_COOLING_FLAG
+            and int(calc_data[LuxtronikAddress.PASSIVE_COOLING_FLAG]) == 1
+        )
+
+        if not passive_cooling:
+            gate_reason = self.check_steady_state(data_store)
+            if gate_reason:
+                return (None, gate_reason)
+
         try:
             data_list = data_store.get(command, [])
             temp1 = float(data_list[indices[0]]) / divider

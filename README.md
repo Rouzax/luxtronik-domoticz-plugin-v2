@@ -217,7 +217,7 @@ Complete heating circuit monitoring including temperatures, spreads, pump, and f
 | 60 | Heat supply temp | Flow temperature to heating system |
 | 61 | Heat return temp | Return temperature from heating system |
 | 62 | Return temp target | Calculated target return temperature |
-| 63 | Heating ΔT | Temperature difference (supply - return), **gated** |
+| 63 | Heating ΔT | Temperature difference (supply - return), **gated** (also updates during passive cooling) |
 | 64 | Heating ΔT target | Controller's ΔT setpoint *(unused by default)* |
 | 65 | Heating ΔT actual | Controller's measured ΔT *(unused by default)* |
 | 66 | Heating pump | Circulation pump speed (%) |
@@ -256,7 +256,7 @@ Ground loop / brine circuit monitoring including temperatures, spreads, pump, an
 |------|--------|-------------|
 | 100 | Source inlet temp | Temperature from ground/well source |
 | 101 | Source outlet temp | Temperature returning to ground/well |
-| 102 | Source ΔT | Source temperature difference, **gated** |
+| 102 | Source ΔT | Source temperature difference, **gated** (also updates during passive cooling) |
 | 103 | Source ΔT target | Controller's source ΔT setpoint *(unused by default)* |
 | 104 | Source ΔT actual | Controller's measured source ΔT *(unused by default)* |
 | 105 | Source pump | Brine circulation pump speed (%) |
@@ -336,7 +336,7 @@ System health indicators.
 
 ### Notes on Gated Devices
 
-Devices marked **gated** only update during steady-state compressor operation (when actual frequency ≥ minimum target frequency). This prevents meaningless readings from skewing statistical averages when the system is idle or ramping up.
+Devices marked **gated** only update during steady-state compressor operation (when actual frequency ≥ minimum target frequency). This prevents meaningless readings from skewing statistical averages when the system is idle or ramping up. Temperature difference devices (Units 63, 102) also update during passive cooling, since circulation pumps are active and ΔT values remain physically meaningful.
 
 ### Reserved Unit Ranges
 
@@ -428,7 +428,7 @@ sudo systemctl start domoticz
 - The plugin uses the DomoticzEx framework (`import DomoticzEx`)
 - Device Unit IDs are organized into 14 logical groups (see `_build_device_specs()`)
 - Write operations require addresses to be in `available_writes` dictionary
-- Gated converters check compressor frequency before reporting values
+- Gated converters check compressor frequency before reporting values (temperature difference converters also pass during passive cooling)
 - Translations use `spec_id` as the lookup key
 
 ## Changelog
