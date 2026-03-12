@@ -86,6 +86,74 @@
         </div>
     </section>
 
+    <!-- Dashboard Preview -->
+    <section id="dashboard" class="dashboard">
+        <div class="container">
+            <h2 class="section__title">Monitoring at a Glance</h2>
+            <div class="dashboard__panel">
+                <div class="dashboard__live-badge">
+                    <span class="dashboard__live-dot"></span>
+                    LIVE
+                </div>
+                <div class="dashboard__content">
+                    <div class="dashboard__gauges">
+                        <div class="dashboard__gauge-block">
+                            <svg class="dashboard__gauge" viewBox="0 0 120 120" width="160" height="160">
+                                <circle class="dashboard__gauge-track" cx="60" cy="60" r="50" />
+                                <circle class="dashboard__gauge-fill dashboard__gauge-fill--cop1" cx="60" cy="60" r="50" />
+                                <text x="60" y="56" class="dashboard__gauge-value">4.2</text>
+                                <text x="60" y="72" class="dashboard__gauge-unit">COP</text>
+                            </svg>
+                            <span class="dashboard__gauge-label">COP Heating</span>
+                        </div>
+                        <div class="dashboard__gauge-block dashboard__gauge-block--small">
+                            <svg class="dashboard__gauge" viewBox="0 0 120 120" width="120" height="120">
+                                <circle class="dashboard__gauge-track" cx="60" cy="60" r="50" />
+                                <circle class="dashboard__gauge-fill dashboard__gauge-fill--cop2" cx="60" cy="60" r="50" />
+                                <text x="60" y="56" class="dashboard__gauge-value">3.8</text>
+                                <text x="60" y="72" class="dashboard__gauge-unit">COP</text>
+                            </svg>
+                            <span class="dashboard__gauge-label">COP Hot Water</span>
+                        </div>
+                    </div>
+                    <div class="dashboard__metrics">
+                        <div class="dashboard__metric">
+                            <span class="dashboard__dot dashboard__dot--green"></span>
+                            <span class="dashboard__metric-name">Flow Temp</span>
+                            <span class="dashboard__metric-value">32.4°C</span>
+                        </div>
+                        <div class="dashboard__metric">
+                            <span class="dashboard__dot dashboard__dot--green"></span>
+                            <span class="dashboard__metric-name">Return Temp</span>
+                            <span class="dashboard__metric-value">28.1°C</span>
+                        </div>
+                        <div class="dashboard__metric">
+                            <span class="dashboard__dot dashboard__dot--green"></span>
+                            <span class="dashboard__metric-name">Source In</span>
+                            <span class="dashboard__metric-value">8.2°C</span>
+                        </div>
+                        <div class="dashboard__metric">
+                            <span class="dashboard__dot dashboard__dot--green"></span>
+                            <span class="dashboard__metric-name">Source Out</span>
+                            <span class="dashboard__metric-value">4.6°C</span>
+                        </div>
+                        <div class="dashboard__metric">
+                            <span class="dashboard__dot dashboard__dot--cyan dashboard__dot--pulse"></span>
+                            <span class="dashboard__metric-name">Compressor</span>
+                            <span class="dashboard__metric-value">42 Hz</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard__thermal">
+                    <span class="dashboard__thermal-label">Thermal Output</span>
+                    <div class="dashboard__thermal-bar">
+                        <div class="dashboard__thermal-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Screenshots -->
     <section id="screenshots" class="screenshots">
         <div class="container">

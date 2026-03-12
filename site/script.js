@@ -90,3 +90,24 @@
 
     observer.observe(statsSection);
 })();
+
+/* === Dashboard Gauge Animation === */
+(function () {
+    var dashboard = document.getElementById('dashboard');
+    if (!dashboard) return;
+
+    var gaugeFills = dashboard.querySelectorAll('.dashboard__gauge-fill');
+
+    var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+                gaugeFills.forEach(function (fill) {
+                    fill.classList.add('is-animated');
+                });
+                observer.disconnect();
+            }
+        });
+    }, { threshold: 0.2 });
+
+    observer.observe(dashboard);
+})();
