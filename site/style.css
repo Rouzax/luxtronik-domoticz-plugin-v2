@@ -256,7 +256,7 @@ img { max-width: 100%; height: auto; display: block; }
 /* === Dashboard Preview === */
 .dashboard {
     padding: 5rem 0;
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
 }
 
 .dashboard__panel {
