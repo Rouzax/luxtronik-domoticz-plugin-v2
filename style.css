@@ -132,3 +132,54 @@ img { max-width: 100%; height: auto; display: block; }
     border-color: var(--accent);
     text-decoration: none;
 }
+
+/* === Stats Bar === */
+.stats {
+    background: var(--bg-stats);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 0;
+}
+
+.stats__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    text-align: center;
+}
+
+.stats__item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: relative;
+}
+
+.stats__item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -1rem;
+    top: 10%;
+    height: 80%;
+    width: 1px;
+    background: var(--border);
+}
+
+.stats__number {
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 800;
+    color: var(--accent);
+    font-family: var(--font-mono);
+}
+
+.stats__label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+@media (max-width: 640px) {
+    .stats__grid { grid-template-columns: repeat(2, 1fr); }
+    .stats__item:nth-child(2)::after { display: none; }
+}
