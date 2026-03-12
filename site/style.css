@@ -179,6 +179,15 @@ img { max-width: 100%; height: auto; display: block; }
     letter-spacing: 0.05em;
 }
 
+.stats__number--animated {
+    opacity: 0;
+    transition: opacity 0.8s ease-out;
+}
+
+.stats__number--animated.is-visible {
+    opacity: 1;
+}
+
 @media (max-width: 640px) {
     .stats__grid { grid-template-columns: repeat(2, 1fr); }
     .stats__item:nth-child(2)::after { display: none; }
