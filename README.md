@@ -106,6 +106,8 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
 | Max COP Value   | Maximum COP to accept; higher values are discarded as measurement artifacts. Leave empty to disable | `30`        |
 | Update Interval | Data update interval in seconds (clamped to 10-60) | `20`        |
 | Language        | Interface language                                  | `English`   |
+| Pump Power Compensation | Add estimated circulation pump power to compressor reading for more accurate COP | `Off` |
+| Pump Power Ranges (W) | HUP min, HUP max, VBO min, VBO max — pump power range in watts | `2,60,3,140` |
 | Debug Level     | Debug log level for troubleshooting                 | `None`      |
 
 ### COP Accuracy Recommendation
@@ -115,7 +117,10 @@ For accurate COP averages over time, enable the following Domoticz setting:
 **Settings → Log History → 'Only add newly received values to the Log'**
 
 When disabled (default), Domoticz fills in the last received value every 5 minutes even when the heat pump is idle, skewing COP averages. When enabled, no values are logged during idle periods, giving accurate daily/monthly efficiency averages.
+
 > **Note:** This is a system-wide Domoticz setting that affects all devices, not just this plugin.
+
+The controller's power reading only measures compressor power. Enable **Pump Power Compensation** to include estimated circulation pump power for true system COP. The default pump power ranges match the WZSV 92K3M — check your manual for other models.
 
 ### Security Notes
 
@@ -125,7 +130,7 @@ When disabled (default), Domoticz fills in the last received value every 5 minut
 
 ## Created Devices
 
-The plugin creates 62 devices organized into 14 logical groups. Devices marked with `Used=0` are created but set to unused by default—enable them in Domoticz if needed.
+The plugin creates 66 devices organized into 14 logical groups. Devices marked with `Used=0` are created but set to unused by default—enable them in Domoticz if needed.
 
 ### Device Groups Overview
 
@@ -142,9 +147,9 @@ The plugin creates 62 devices organized into 14 logical groups. Devices marked w
 | 9 | 100-106 | Source Circuit | 7 |
 | 10 | 120-131 | Mixing Circuits | 4 |
 | 11 | 140-144 | Compressor | 5 |
-| 12 | 160-167 | Refrigerant Circuit | 8 |
+| 12 | 160-170 | Refrigerant Circuit | 11 |
 | 13 | 180-185 | Statistics & Counters | 6 |
-| 14 | 200-201 | Diagnostics | 2 |
+| 14 | 200-202 | Diagnostics | 3 |
 
 ---
 
@@ -301,10 +306,13 @@ Refrigerant temperatures and pressures.
 | 161 | Suction temp | Compressor inlet temperature |
 | 162 | Discharge temp | Discharge line temperature |
 | 163 | Evaporating temp | Refrigerant evaporation point |
-| 164 | Condensing temp | Refrigerant condensation point |
+| 164 | Liquid line temp | Liquid line temperature before EEV |
 | 165 | Superheat | Refrigerant superheat (K), **gated** |
 | 166 | Pressure high | High-side pressure (bar), **gated** |
 | 167 | Pressure low | Low-side pressure (bar), **gated** |
+| 168 | Condensing temp | Condensing temperature from firmware, **gated** *(unused by default)* |
+| 169 | Subcooling | Condensing temp − liquid line temp (K), **gated** *(unused by default)* |
+| 170 | Condensing pressure | Condensing pressure from firmware (bar), **gated** *(unused by default)* |
 
 ---
 
@@ -331,6 +339,7 @@ System health indicators.
 |------|--------|-------------|
 | 200 | Error count | Number of stored errors *(unused by default)* |
 | 201 | Cooling permitted | Whether cooling is currently allowed *(unused by default)* |
+| 202 | Cooling release | Countdown timer until cooling is permitted (HH:MM:SS) *(unused by default)* |
 
 ---
 
@@ -341,7 +350,7 @@ Devices marked **gated** only update during steady-state compressor operation (w
 ### Reserved Unit Ranges
 
 Each group has reserved unit numbers for future expansion:
-- Units 2-9, 17-29, 33-39, 43-49, 53-59, 68-79, 81-89, 94-99, 107-119, 122-129, 132-139, 145-159, 168-179, 186-199, 202-209
+- Units 2-9, 17-29, 33-39, 43-49, 53-59, 68-79, 81-89, 94-99, 107-119, 122-129, 132-139, 145-159, 171-179, 186-199, 203-209
 
 ## Debugging
 
@@ -432,6 +441,15 @@ sudo systemctl start domoticz
 - Translations use `spec_id` as the lookup key
 
 ## Changelog
+
+### Version 2.0.4
+- Pump power compensation: estimates HUP/VBO circulation pump power from speed percentages and adds it to the compressor power reading for more accurate system COP
+- Configurable pump power ranges (Mode5) with defaults for WZSV 92K3M
+
+### Version 2.0.3
+- New refrigerant diagnostics: condensing temperature, subcooling, condensing pressure (all gated, unused by default)
+- New cooling release countdown timer (HH:MM:SS format, unused by default)
+- Audit fixes for steady-state gating, refrigerant sensors, and robustness
 
 ### Version 2.0.2
 - Temperature difference devices (heating ΔT, brine ΔT) now also update during passive cooling
