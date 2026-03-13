@@ -57,6 +57,16 @@ Author: Rouzax, 2025 (Refactored)
                 <option label="French" value="4"/>
             </options>
         </param>
+        <param field="Mode4" label="Pump Power Compensation" width="150px">
+            <description>Add estimated circulation pump power to compressor reading for more accurate COP. Requires pump speed data from controller.</description>
+            <options>
+                <option label="Off" value="0" default="true"/>
+                <option label="On" value="1"/>
+            </options>
+        </param>
+        <param field="Mode5" label="Pump Power Ranges (W)" width="200px" required="false" default="2,60,3,140">
+            <description>Min/max power for HUP and VBO pumps: HUP_min,HUP_max,VBO_min,VBO_max. Default values are for WZSV 92K3M (from manual).</description>
+        </param>
         <param field="Mode6" label="Debug Level" width="150px">
             <description>Select debug categories to enable</description>
             <options>
