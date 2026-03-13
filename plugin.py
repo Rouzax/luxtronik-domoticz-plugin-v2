@@ -2961,6 +2961,79 @@ class LuxtronikPlugin:
                 f"Expected a positive number."
             )
     
+    def _configure_pump_compensation(self, mode4: str, mode5: str) -> None:
+        """Parse pump power compensation settings.
+
+        Args:
+            mode4: '0' (off) or '1' (on)
+            mode5: 'HUP_min,HUP_max,VBO_min,VBO_max' in watts
+        """
+        self._pump_compensation_enabled = (mode4 == '1')
+        self._pump_power_ranges = None
+
+        if not self._pump_compensation_enabled:
+            return
+
+        try:
+            parts = [float(x.strip()) for x in mode5.split(',')]
+            if len(parts) != 4:
+                raise ValueError(f"Expected 4 values, got {len(parts)}")
+            if any(p < 0 for p in parts):
+                raise ValueError("Negative power values not allowed")
+            if parts[0] > parts[1] or parts[2] > parts[3]:
+                raise ValueError("Min must not exceed max")
+            self._pump_power_ranges = {
+                'hup_min': parts[0], 'hup_max': parts[1],
+                'vbo_min': parts[2], 'vbo_max': parts[3],
+            }
+            _logger.log(f"Pump power compensation enabled: HUP {parts[0]}-{parts[1]}W, VBO {parts[2]}-{parts[3]}W", DebugLevel.BASIC)
+        except (ValueError, IndexError) as e:
+            _logger.error(f"Invalid pump power ranges '{mode5}': {e}. Disabling compensation.")
+            self._pump_compensation_enabled = False
+
+    @staticmethod
+    def _estimate_pump_power(speed_pct: float, p_min: float, p_max: float) -> float:
+        """Estimate pump power from speed percentage using quadratic model.
+
+        Quadratic is a reasonable middle ground between linear (overestimates)
+        and cubic affinity law (underestimates for ECM pumps).
+        """
+        fraction = max(0.0, min(1.0, speed_pct / 100.0))
+        return p_min + (p_max - p_min) * fraction * fraction
+
+    def _apply_pump_compensation(self, data_store: DataStore) -> None:
+        """Add estimated pump power to compressor power reading in data store.
+
+        Modifies POWER_TOTAL in-place so all downstream converters
+        (power devices, COP calculators) automatically use the corrected value.
+        """
+        if not self._pump_compensation_enabled or self._pump_power_ranges is None:
+            return
+
+        calc_data = data_store.get('READ_CALCUL', [])
+        if not calc_data:
+            return
+
+        try:
+            ranges = self._pump_power_ranges
+            compressor_power = float(calc_data[LuxtronikAddress.POWER_TOTAL])
+            hup_speed = float(calc_data[LuxtronikAddress.HEATING_PUMP_SPEED])
+            vbo_speed = float(calc_data[LuxtronikAddress.BRINE_PUMP_SPEED])
+
+            hup_power = self._estimate_pump_power(hup_speed, ranges['hup_min'], ranges['hup_max'])
+            vbo_power = self._estimate_pump_power(vbo_speed, ranges['vbo_min'], ranges['vbo_max'])
+
+            total_power = compressor_power + hup_power + vbo_power
+            calc_data[LuxtronikAddress.POWER_TOTAL] = total_power
+
+            _logger.log(
+                f"Pump compensation: compressor={compressor_power:.0f}W + "
+                f"HUP({hup_speed:.0f}%)={hup_power:.0f}W + "
+                f"VBO({vbo_speed:.0f}%)={vbo_power:.0f}W = {total_power:.0f}W",
+                DebugLevel.DEVICE)
+        except (IndexError, TypeError, ValueError) as e:
+            _logger.log(f"Pump compensation error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+
     def _check_cop_logging_setting(self) -> None:
         """Check and warn if COP logging setting is not optimal.
         
