@@ -2050,6 +2050,8 @@ class LuxtronikPlugin:
             'READ_PARAMS': {},
         }
         self._device_id: str = ""  # Will be set during onStart
+        self._pump_compensation_enabled: bool = False
+        self._pump_power_ranges: Optional[Dict[str, float]] = None
     
     def _get_device_id(self) -> str:
         """Generate stable DeviceID based on HardwareID.
@@ -2901,6 +2903,9 @@ class LuxtronikPlugin:
             else:
                 _logger.log(f"No result for {command_name}", DebugLevel.COMMS)
         
+        # Apply pump power compensation (modifies POWER_TOTAL in-place)
+        self._apply_pump_compensation(data_store)
+
         # Phase 2: Update devices with shared data store
         for command in command_codes.keys():
             if command in data_store:
@@ -3125,7 +3130,10 @@ class LuxtronikPlugin:
             
             # Configure max COP limit
             self._configure_max_cop(Parameters.get('Mode1', '30'))
-            
+            self._configure_pump_compensation(
+                Parameters.get('Mode4', '0'),
+                Parameters.get('Mode5', '2,60,3,140'))
+
             # Create devices (this also initializes available_writes)
             self.create_devices()
             
