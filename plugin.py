@@ -33,7 +33,7 @@ Author: Rouzax, 2025 (Refactored)
         <h3>COP Accuracy Note:</h3>
         <p>For accurate COP averages over time, enable: <b>Settings → Log History → 'Only add newly received values to the Log'</b></p>
         <p>When disabled, Domoticz fills in the last received value every 5 minutes even when the heat pump is idle, skewing COP averages.</p>
-        <p>The controller's power reading only measures compressor power. Enable <b>Pump Power Compensation</b> to include estimated circulation pump power for true system COP.</p>
+        <p>The controller's power reading only measures compressor power. Enable 'Pump Power Compensation' to include estimated circulation pump power for true system COP.</p>
     </description>
     <params>
         <param field="Address" label="Heat Pump IP Address" width="200px" required="true" default="127.0.0.1">
@@ -66,7 +66,16 @@ Author: Rouzax, 2025 (Refactored)
             </options>
         </param>
         <param field="Mode5" label="Pump Power Ranges (W)" width="200px" required="false" default="2,60,3,140">
-            <description>Four values: HUP min, HUP max, VBO min, VBO max.&lt;br/&gt;Default is for WZSV 92K3M. Check your manual for other models.</description>
+            <description>
+                <table border="1" cellpadding="3" cellspacing="0" style="margin:4px 0">
+                    <tr><th>Position</th><th>Pump</th><th>Default (W)</th></tr>
+                    <tr><td>1</td><td>HUP min</td><td>2</td></tr>
+                    <tr><td>2</td><td>HUP max</td><td>60</td></tr>
+                    <tr><td>3</td><td>VBO min</td><td>3</td></tr>
+                    <tr><td>4</td><td>VBO max</td><td>140</td></tr>
+                </table>
+                Default values are for WZSV 92K3M. Check your manual for other models.
+            </description>
         </param>
         <param field="Mode6" label="Debug Level" width="150px">
             <description>Select debug categories to enable</description>
