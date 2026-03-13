@@ -66,7 +66,7 @@ Author: Rouzax, 2025 (Refactored)
             </options>
         </param>
         <param field="Mode5" label="Pump Power Ranges (W)" width="200px" required="false" default="2,60,3,140">
-            <description>Min/max power for HUP and VBO pumps: HUP_min,HUP_max,VBO_min,VBO_max. Default values are for WZSV 92K3M (from manual).</description>
+            <description>Four values: HUP min, HUP max, VBO min, VBO max.&lt;br/&gt;Default is for WZSV 92K3M. Check your manual for other models.</description>
         </param>
         <param field="Mode6" label="Debug Level" width="150px">
             <description>Select debug categories to enable</description>
