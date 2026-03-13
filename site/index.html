@@ -89,116 +89,277 @@
         </div>
     </section>
 
-    <!-- Dashboard Preview -->
-    <section id="dashboard" class="dashboard">
+    <!-- Device Cards -->
+    <section id="devices" class="devices">
         <div class="container">
-            <h2 class="section__title">Monitoring at a Glance</h2>
-            <div class="dashboard__panel">
-                <div class="dashboard__live-badge">
-                    <span class="dashboard__live-dot"></span>
-                    LIVE
+            <h2 class="section__title">62 Devices at Your Fingertips</h2>
+
+            <h3 class="devices__group-label">Efficiency &amp; Power</h3>
+            <div class="devices__grid">
+                <div class="device-card">
+                    <span class="device-card__name">COP total</span>
+                    <span class="device-card__value">9.81 <span class="device-card__unit">COP</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="70 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="var(--accent)" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Combined efficiency &mdash; higher is better</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
                 </div>
-                <div class="dashboard__content">
-                    <div class="dashboard__gauges">
-                        <div class="dashboard__gauge-block">
-                            <svg class="dashboard__gauge" viewBox="0 0 120 120" width="160" height="160">
-                                <circle class="dashboard__gauge-track" cx="60" cy="60" r="50" />
-                                <circle class="dashboard__gauge-fill dashboard__gauge-fill--cop1" cx="60" cy="60" r="50" />
-                                <text x="60" y="56" class="dashboard__gauge-value">3.15</text>
-                                <text x="60" y="72" class="dashboard__gauge-unit">COP</text>
-                            </svg>
-                            <span class="dashboard__gauge-label">COP Total</span>
-                        </div>
-                        <div class="dashboard__gauge-block dashboard__gauge-block--small">
-                            <svg class="dashboard__gauge" viewBox="0 0 120 120" width="120" height="120">
-                                <circle class="dashboard__gauge-track" cx="60" cy="60" r="50" />
-                                <circle class="dashboard__gauge-fill dashboard__gauge-fill--cop2" cx="60" cy="60" r="50" />
-                                <text x="60" y="56" class="dashboard__gauge-value">11.76</text>
-                                <text x="60" y="72" class="dashboard__gauge-unit">COP</text>
-                            </svg>
-                            <span class="dashboard__gauge-label">COP Heating</span>
-                        </div>
-                    </div>
-                    <div class="dashboard__metrics">
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--green"></span>
-                            <span class="dashboard__metric-name">Outside</span>
-                            <span class="dashboard__metric-value">10.6°C</span>
-                        </div>
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--green"></span>
-                            <span class="dashboard__metric-name">Room</span>
-                            <span class="dashboard__metric-value">21.1°C</span>
-                        </div>
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--green"></span>
-                            <span class="dashboard__metric-name">DHW Tank</span>
-                            <span class="dashboard__metric-value">56.3°C</span>
-                        </div>
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--green"></span>
-                            <span class="dashboard__metric-name">Supply</span>
-                            <span class="dashboard__metric-value">21.4°C</span>
-                        </div>
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--green"></span>
-                            <span class="dashboard__metric-name">Source In</span>
-                            <span class="dashboard__metric-value">22.9°C</span>
-                        </div>
-                        <div class="dashboard__metric">
-                            <span class="dashboard__dot dashboard__dot--cyan dashboard__dot--pulse"></span>
-                            <span class="dashboard__metric-name">Compressor</span>
-                            <span class="dashboard__metric-value">0 Hz</span>
-                        </div>
-                    </div>
+                <div class="device-card">
+                    <span class="device-card__name">COP heating</span>
+                    <span class="device-card__value">11.76 <span class="device-card__unit">COP</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-dasharray="85 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="#22c55e" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Heating-only, gated to steady state</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
                 </div>
-                <div class="dashboard__sparklines">
-                    <div class="dashboard__sparkline">
-                        <span class="dashboard__sparkline-label">Outside Temp <span class="dashboard__sparkline-range">5.5 – 13.3°C</span></span>
-                        <svg viewBox="0 0 300 60" class="dashboard__sparkline-svg">
-                            <path class="dashboard__sparkline-path dashboard__sparkline-path--temp" d="M0.0,47.5 L2.0,47.0 L4.0,46.0 L7.1,44.0 L9.1,43.0 L12.1,42.0 L14.1,40.5 L17.1,38.0 L19.1,36.5 L22.1,35.0 L24.2,33.5 L27.2,31.0 L29.2,30.0 L32.2,28.0 L34.2,26.5 L37.2,24.5 L39.3,23.0 L42.3,22.0 L44.3,20.0 L47.3,19.0 L49.3,18.0 L52.3,17.5 L54.4,16.5 L57.4,15.0 L59.4,14.0 L62.4,14.0 L64.4,14.0 L67.4,13.0 L69.5,12.0 L72.5,11.0 L74.5,11.0 L77.5,10.0 L79.5,9.0 L82.6,9.5 L84.6,9.5 L87.6,9.5 L89.6,9.5 L92.6,9.5 L94.6,9.5 L97.7,9.0 L99.7,9.5 L102.7,10.0 L104.7,10.5 L107.7,10.5 L109.7,11.0 L112.8,11.5 L114.8,11.5 L117.8,12.5 L119.8,13.0 L122.8,14.0 L124.8,14.5 L127.9,15.5 L129.9,15.5 L132.9,16.5 L134.9,17.0 L137.9,18.0 L139.9,18.0 L143.0,18.5 L145.0,19.0 L148.0,19.5 L150.0,20.0 L152.0,20.0 L155.0,20.0 L157.0,20.0 L160.1,20.0 L162.1,20.5 L165.1,21.0 L167.1,21.5 L170.1,22.0 L172.1,22.0 L175.2,22.5 L177.2,23.0 L180.2,23.0 L182.2,23.5 L185.2,24.0 L187.2,24.5 L190.3,25.0 L192.3,25.5 L195.3,25.5 L197.3,26.0 L200.3,26.0 L202.3,26.0 L205.4,25.5 L207.4,25.5 L210.4,25.5 L212.4,25.0 L215.4,24.5 L217.4,24.5 L220.5,24.0 L222.5,24.0 L225.5,24.0 L227.5,23.5 L230.5,24.0 L232.6,24.0 L235.6,24.0 L237.6,24.0 L240.6,23.5 L242.6,23.5 L245.6,23.5 L247.7,23.5 L250.7,23.5 L252.7,23.5 L255.7,23.5 L257.7,23.5 L260.7,23.5 L262.8,23.5 L265.8,23.0 L267.8,23.0 L270.8,23.0 L272.8,22.5 L275.8,22.0 L277.9,22.0 L280.9,22.0 L282.9,22.0 L285.9,22.5 L287.9,23.0 L290.9,23.5 L293.0,23.0 L296.0,23.0 L298.0,22.5 L300.0,22.5" />
-                        </svg>
-                    </div>
-                    <div class="dashboard__sparkline">
-                        <span class="dashboard__sparkline-label">DHW Tank <span class="dashboard__sparkline-range">51.0 – 59.1°C</span></span>
-                        <svg viewBox="0 0 300 60" class="dashboard__sparkline-svg">
-                            <path class="dashboard__sparkline-path dashboard__sparkline-path--dhw" d="M0.0,29.0 L2.0,30.0 L4.0,37.0 L7.1,32.5 L9.1,23.0 L12.1,10.5 L14.1,10.0 L17.1,10.0 L19.1,10.5 L22.1,11.0 L24.2,11.5 L27.2,12.0 L29.2,12.5 L32.2,12.5 L34.2,13.0 L37.2,13.0 L39.3,14.5 L42.3,15.0 L44.3,15.5 L47.3,16.0 L49.3,16.0 L52.3,16.5 L54.4,16.5 L57.4,17.0 L59.4,18.0 L62.4,18.5 L64.4,19.5 L67.4,20.0 L69.5,21.0 L72.5,21.5 L74.5,22.0 L77.5,22.0 L79.5,22.5 L82.6,23.5 L84.6,23.5 L87.6,24.0 L89.6,24.5 L92.6,25.0 L94.6,25.0 L97.7,25.5 L99.7,25.5 L102.7,26.5 L104.7,27.0 L107.7,27.0 L109.7,27.5 L112.8,28.0 L114.8,28.5 L117.8,30.0 L119.8,42.0 L122.8,34.5 L124.8,24.0 L127.9,12.0 L129.9,12.0 L132.9,18.0 L134.9,27.0 L137.9,30.0 L139.9,46.5 L143.0,46.5 L145.0,39.0 L148.0,24.0 L150.0,15.0 L152.0,10.0 L155.0,10.0 L157.0,10.5 L160.1,14.0 L162.1,21.5 L165.1,23.5 L167.1,24.0 L170.1,25.0 L172.1,26.5 L175.2,27.5 L177.2,28.5 L180.2,30.0 L182.2,45.0 L185.2,43.5 L187.2,35.0 L190.3,20.5 L192.3,11.5 L195.3,10.0 L197.3,10.0 L200.3,11.0 L202.3,11.0 L205.4,11.5 L207.4,11.5 L210.4,12.0 L212.4,12.0 L215.4,12.0 L217.4,12.5 L220.5,12.5 L222.5,12.5 L225.5,13.0 L227.5,13.0 L230.5,13.5 L232.6,13.5 L235.6,13.5 L237.6,13.5 L240.6,14.0 L242.6,14.0 L245.6,14.5 L247.7,15.0 L250.7,15.0 L252.7,15.0 L255.7,15.5 L257.7,15.5 L260.7,16.0 L262.8,16.0 L265.8,16.5 L267.8,16.5 L270.8,17.0 L272.8,17.0 L275.8,17.5 L277.9,17.5 L280.9,18.0 L282.9,18.0 L285.9,19.5 L287.9,20.5 L290.9,21.5 L293.0,22.0 L296.0,23.0 L298.0,23.5 L300.0,23.5" />
-                        </svg>
-                    </div>
-                    <div class="dashboard__sparkline">
-                        <span class="dashboard__sparkline-label">Compressor <span class="dashboard__sparkline-range">0 – 54 Hz</span></span>
-                        <svg viewBox="0 0 300 60" class="dashboard__sparkline-svg">
-                            <path class="dashboard__sparkline-path dashboard__sparkline-path--comp" d="M0.0,31.4 L2.0,31.4 L4.0,5.9 L7.1,13.2 L9.1,15.0 L12.1,55.0 L14.1,55.0 L17.1,55.0 L19.1,55.0 L22.1,55.0 L24.2,55.0 L27.2,55.0 L29.2,55.0 L32.2,55.0 L34.2,55.0 L37.2,55.0 L39.3,55.0 L42.3,55.0 L44.3,55.0 L47.3,55.0 L49.3,55.0 L52.3,55.0 L54.4,55.0 L57.4,55.0 L59.4,55.0 L62.4,55.0 L64.4,55.0 L67.4,55.0 L69.5,55.0 L72.5,55.0 L74.5,55.0 L77.5,55.0 L79.5,55.0 L82.6,55.0 L84.6,55.0 L87.6,55.0 L89.6,55.0 L92.6,55.0 L94.6,55.0 L97.7,55.0 L99.7,55.0 L102.7,55.0 L104.7,55.0 L107.7,55.0 L109.7,55.0 L112.8,55.0 L114.8,55.0 L117.8,55.0 L119.8,9.5 L122.8,13.2 L124.8,15.0 L127.9,55.0 L129.9,55.0 L132.9,55.0 L134.9,55.0 L137.9,55.0 L139.9,7.7 L143.0,7.7 L145.0,7.7 L148.0,15.0 L150.0,14.1 L152.0,55.0 L155.0,55.0 L157.0,55.0 L160.1,55.0 L162.1,55.0 L165.1,55.0 L167.1,55.0 L170.1,55.0 L172.1,55.0 L175.2,55.0 L177.2,55.0 L180.2,55.0 L182.2,7.7 L185.2,7.7 L187.2,10.5 L190.3,15.0 L192.3,55.0 L195.3,55.0 L197.3,55.0 L200.3,55.0 L202.3,55.0 L205.4,55.0 L207.4,55.0 L210.4,55.0 L212.4,55.0 L215.4,55.0 L217.4,55.0 L220.5,55.0 L222.5,55.0 L225.5,55.0 L227.5,55.0 L230.5,55.0 L232.6,55.0 L235.6,55.0 L237.6,55.0 L240.6,55.0 L242.6,55.0 L245.6,55.0 L247.7,55.0 L250.7,55.0 L252.7,55.0 L255.7,55.0 L257.7,55.0 L260.7,55.0 L262.8,55.0 L265.8,55.0 L267.8,55.0 L270.8,55.0 L272.8,55.0 L275.8,55.0 L277.9,55.0 L280.9,55.0 L282.9,55.0 L285.9,55.0 L287.9,55.0 L290.9,55.0 L293.0,55.0 L296.0,55.0 L298.0,55.0 L300.0,55.0" />
-                        </svg>
-                    </div>
+                <div class="device-card">
+                    <span class="device-card__name">COP DHW</span>
+                    <span class="device-card__value">4.22 <span class="device-card__unit">COP</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="45 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="#f59e0b" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Hot water efficiency &mdash; lower due to higher temps</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
                 </div>
-                <div class="dashboard__thermal">
-                    <span class="dashboard__thermal-label">Thermal Output</span>
-                    <div class="dashboard__thermal-bar">
-                        <div class="dashboard__thermal-fill"></div>
-                    </div>
+                <div class="device-card">
+                    <span class="device-card__name">Working mode</span>
+                    <span class="device-card__value device-card__value--text">Heating</span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M10 14c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/><path d="M10 22c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/><path d="M10 30c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/></svg></span>
+                    <span class="device-card__desc">Current operating state of the heat pump</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Power total</span>
+                    <span class="device-card__value">1,847 <span class="device-card__unit">W</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M22 6L14 22h6l-2 12 8-16h-6l2-12z" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+                    <span class="device-card__desc">Electrical input &mdash; compressor, pumps, controls</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Heat out total</span>
+                    <span class="device-card__value">5,432 <span class="device-card__unit">W</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 6c-2 4-7 8-7 14a7 7 0 0014 0c0-6-5-10-7-14z" fill="none" stroke="#ef4444" stroke-width="1.8"/><path d="M20 16c-1 2-3 4-3 7a3 3 0 006 0c0-3-2-5-3-7z" fill="#ef4444" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Thermal output delivered to your home</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Heating &Delta;T</span>
+                    <span class="device-card__value">6.4<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M10 28L20 12l10 16z" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/><text x="20" y="26" text-anchor="middle" fill="var(--accent)" font-size="10" font-weight="700">&Delta;</text></svg></span>
+                    <span class="device-card__desc">Supply minus return &mdash; heat actually delivered</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Heating flow</span>
+                    <span class="device-card__value">842 <span class="device-card__unit">L/h</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M8 20h24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><path d="M26 14l6 6-6 6" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14" cy="20" r="2" fill="var(--accent)" opacity="0.4"/><circle cx="20" cy="20" r="2" fill="var(--accent)" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Water flow rate through the heating circuit</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
                 </div>
             </div>
-        </div>
-    </section>
 
-    <!-- Screenshots -->
-    <section id="screenshots" class="screenshots">
-        <div class="container">
-            <h2 class="section__title">In Action</h2>
-            <div class="screenshots__grid">
-                <figure class="screenshot" data-full="https://github.com/user-attachments/assets/2e36ea32-a578-4e54-835f-b9cfd6835e24">
-                    <img src="https://github.com/user-attachments/assets/2e36ea32-a578-4e54-835f-b9cfd6835e24" alt="Utility Devices in Domoticz" loading="lazy">
-                    <figcaption>Utility Devices</figcaption>
-                </figure>
-                <figure class="screenshot" data-full="https://github.com/user-attachments/assets/2f9d1438-6572-4afe-9de3-2fe99d69ca8e">
-                    <img src="https://github.com/user-attachments/assets/2f9d1438-6572-4afe-9de3-2fe99d69ca8e" alt="Temperature Devices in Domoticz" loading="lazy">
-                    <figcaption>Temperature Devices</figcaption>
-                </figure>
-                <figure class="screenshot" data-full="https://github.com/user-attachments/assets/fa9195f6-0780-49e6-961f-196bc92405cb">
-                    <img src="https://github.com/user-attachments/assets/fa9195f6-0780-49e6-961f-196bc92405cb" alt="Switch Devices in Domoticz" loading="lazy">
-                    <figcaption>Switch Devices</figcaption>
-                </figure>
+            <h3 class="devices__group-label">Temperatures</h3>
+            <div class="devices__grid">
+                <div class="device-card">
+                    <span class="device-card__name">Outside temp</span>
+                    <span class="device-card__value">9.2<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#38bdf8" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#38bdf8" stroke-width="1.5"/><rect x="19" y="14" width="2" height="12" rx="1" fill="#38bdf8" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Ambient air &mdash; drives the heating curve</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Room temp</span>
+                    <span class="device-card__value">21.1<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#f97316" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#f97316" stroke-width="1.5"/><rect x="19" y="10" width="2" height="16" rx="1" fill="#f97316" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Reference room for temperature regulation</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">DHW temp</span>
+                    <span class="device-card__value">55.6<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#ef4444" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#ef4444" stroke-width="1.5"/><rect x="19" y="8" width="2" height="18" rx="1" fill="#ef4444" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Hot water tank temperature</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Heat supply temp</span>
+                    <span class="device-card__value">27.6<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#f97316" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#f97316" stroke-width="1.5"/><rect x="19" y="12" width="2" height="14" rx="1" fill="#f97316" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Water leaving the heat pump</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Heat return temp</span>
+                    <span class="device-card__value">21.2<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#f97316" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#f97316" stroke-width="1.5"/><rect x="19" y="10" width="2" height="16" rx="1" fill="#f97316" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Water returning from the heating system</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Source inlet temp</span>
+                    <span class="device-card__value">22.7<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="17" y="6" width="6" height="20" rx="3" fill="none" stroke="#22c55e" stroke-width="1.5"/><circle cx="20" cy="30" r="5" fill="none" stroke="#22c55e" stroke-width="1.5"/><rect x="19" y="10" width="2" height="16" rx="1" fill="#22c55e" opacity="0.6"/></svg></span>
+                    <span class="device-card__desc">Ground source temperature entering the unit</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Brine &Delta;T</span>
+                    <span class="device-card__value">3.1<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M10 28L20 12l10 16z" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linejoin="round"/><text x="20" y="26" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="700">&Delta;</text></svg></span>
+                    <span class="device-card__desc">Energy extracted from the ground loop</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">DHW temp target</span>
+                    <span class="device-card__value">52.0<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3 3"/><circle cx="20" cy="20" r="6" fill="none" stroke="#ef4444" stroke-width="1.8"/><circle cx="20" cy="20" r="2" fill="#ef4444"/></svg></span>
+                    <span class="device-card__desc">Hot water setpoint &mdash; adjustable 30&ndash;65&deg;C</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+            </div>
+
+            <h3 class="devices__group-label">Controls</h3>
+            <div class="devices__grid">
+                <div class="device-card">
+                    <span class="device-card__name">Heating mode</span>
+                    <span class="device-card__value device-card__value--text">Automatic</span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M10 14c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="#f97316" stroke-width="1.8" stroke-linecap="round"/><path d="M10 22c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="#f97316" stroke-width="1.8" stroke-linecap="round"/><path d="M10 30c2 4 4-2 6 2s4-2 6 2 4-2 6 2" fill="none" stroke="#f97316" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/></svg></span>
+                    <span class="device-card__desc">Automatic, Party, Holiday, or Off</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Hot water mode</span>
+                    <span class="device-card__value device-card__value--text">Automatic</span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 8c-2 5-8 9-8 16a8 8 0 0016 0c0-7-6-11-8-16z" fill="none" stroke="#38bdf8" stroke-width="1.5"/><path d="M20 18c-1 2-4 4-4 7a4 4 0 008 0c0-3-3-5-4-7z" fill="#38bdf8" opacity="0.25"/></svg></span>
+                    <span class="device-card__desc">Independent control from heating mode</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Cooling</span>
+                    <span class="device-card__value device-card__value--text">On <span class="device-card__toggle device-card__toggle--on"></span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><line x1="20" y1="6" x2="20" y2="34" stroke="#38bdf8" stroke-width="1.8"/><line x1="6" y1="20" x2="34" y2="20" stroke="#38bdf8" stroke-width="1.8"/><line x1="10" y1="10" x2="30" y2="30" stroke="#38bdf8" stroke-width="1.2" opacity="0.5"/><line x1="30" y1="10" x2="10" y2="30" stroke="#38bdf8" stroke-width="1.2" opacity="0.5"/><circle cx="20" cy="20" r="3" fill="#38bdf8" opacity="0.4"/></svg></span>
+                    <span class="device-card__desc">Enable passive or active cooling</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">DHW Power Mode</span>
+                    <span class="device-card__value device-card__value--text">Normal</span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 8c-2 5-8 9-8 16a8 8 0 0016 0c0-7-6-11-8-16z" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M20 18c-1 2-4 4-4 7a4 4 0 008 0c0-3-3-5-4-7z" fill="var(--text-muted)" opacity="0.25"/></svg></span>
+                    <span class="device-card__desc">Normal vs Luxury &mdash; controls compressor speed</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+            </div>
+
+            <h3 class="devices__group-label">Compressor &amp; Statistics</h3>
+            <div class="devices__grid">
+                <div class="device-card">
+                    <span class="device-card__name">Compressor freq</span>
+                    <span class="device-card__value">40 <span class="device-card__unit">Hz</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="55 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="var(--accent)" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Current compressor speed</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Compressor capacity</span>
+                    <span class="device-card__value">34 <span class="device-card__unit">%</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="35 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="var(--accent)" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Load relative to maximum capability</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Superheat</span>
+                    <span class="device-card__value">8.2 <span class="device-card__unit">K</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-dasharray="40 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="#22c55e" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Expansion valve health indicator</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Pressure high</span>
+                    <span class="device-card__value">10.74 <span class="device-card__unit">bar</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/><circle cx="20" cy="20" r="16" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="60 100" stroke-linecap="round" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="6" fill="#f59e0b" opacity="0.3"/></svg></span>
+                    <span class="device-card__desc">Condenser pressure &mdash; system health</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Last cycle</span>
+                    <span class="device-card__value">2.4 <span class="device-card__unit">hrs</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--accent)" stroke-width="1.5"/><path d="M20 10v10l7 4" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="20" r="2" fill="var(--accent)" opacity="0.4"/></svg></span>
+                    <span class="device-card__desc">Duration of last completed compressor run</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:12 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Compressor runtime</span>
+                    <span class="device-card__value">8,412 <span class="device-card__unit">hrs</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M20 10v10l7 4" fill="none" stroke="var(--text-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="20" r="2" fill="var(--text-muted)" opacity="0.4"/></svg></span>
+                    <span class="device-card__desc">Lifetime hours &mdash; for maintenance planning</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Compressor starts</span>
+                    <span class="device-card__value">3,847</span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M12 30V14" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round"/><path d="M19 30V18" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round"/><path d="M26 30V10" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round"/><path d="M33 30V22" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+                    <span class="device-card__desc">Total starts &mdash; indicates cycling behavior</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 9:39 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
+                <div class="device-card">
+                    <span class="device-card__name">Temp adjust</span>
+                    <span class="device-card__value">+1.0<span class="device-card__unit">&deg; C</span></span>
+                    <span class="device-card__icon"><svg width="40" height="40" viewBox="0 0 40 40"><rect x="8" y="19" width="24" height="3" rx="1.5" fill="var(--text-muted)" opacity="0.3"/><circle cx="24" cy="20.5" r="5" fill="none" stroke="var(--accent)" stroke-width="1.8"/><circle cx="24" cy="20.5" r="2" fill="var(--accent)" opacity="0.5"/></svg></span>
+                    <span class="device-card__desc">Manual heating curve offset &plusmn;5&deg;C</span>
+                    <span class="device-card__star">&#9734;</span>
+                    <span class="device-card__time">03/13/2026 8:57 AM</span>
+                    <span class="device-card__tools"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="1" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/><rect x="9" y="8" width="4" height="5" rx="0.5" stroke="var(--accent)" stroke-width="1.2"/></svg></span>
+                </div>
             </div>
         </div>
     </section>
@@ -218,12 +379,6 @@
             <span class="footer__version">v2.0.2</span>
         </div>
     </footer>
-
-    <!-- Lightbox -->
-    <div id="lightbox" class="lightbox" hidden>
-        <button class="lightbox__close" aria-label="Close">&times;</button>
-        <img class="lightbox__img" src="" alt="">
-    </div>
 
     <script src="script.js"></script>
 </body>
