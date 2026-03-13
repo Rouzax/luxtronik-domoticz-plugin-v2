@@ -442,11 +442,9 @@ sudo systemctl start domoticz
 
 ## Changelog
 
-### Version 2.0.4
-- Pump power compensation: estimates HUP/VBO circulation pump power from speed percentages and adds it to the compressor power reading for more accurate system COP
-- Configurable pump power ranges (Mode5) with defaults for WZSV 92K3M
-
 ### Version 2.0.3
+- Pump power compensation: estimates HUP/VBO circulation pump power from speed percentages and adds it to the compressor power reading for more accurate system COP
+- Configurable pump power ranges with defaults for WZSV 92K3M
 - New refrigerant diagnostics: condensing temperature, subcooling, condensing pressure (all gated, unused by default)
 - New cooling release countdown timer (HH:MM:SS format, unused by default)
 - Audit fixes for steady-state gating, refrigerant sensors, and robustness
