@@ -899,11 +899,11 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.FRENCH: 'Temp. évaporation',
             },
             'description': {
-                Language.ENGLISH: 'Refrigerant evaporation point.\nIndicates source-side heat transfer.\nLow pressure corresponds to this saturation temp.',
-                Language.POLISH: 'Punkt parowania czynnika chłodniczego.\nWskazuje transfer ciepła po stronie źródłowej.\nNiskie ciśnienie odpowiada tej temp. nasycenia.',
-                Language.DUTCH: 'Verdampingspunt van koudemiddel.\nIndicatie van warmteoverdracht bronzijde.\nLage druk correspondeert met deze verzadigingstemp.',
-                Language.GERMAN: 'Verdampfungspunkt des Kältemittels.\nZeigt Wärmeübertragung quellenseitig.\nNiederdruck entspricht dieser Sättigungstemperatur.',
-                Language.FRENCH: 'Point d\'évaporation du réfrigérant.\nIndique le transfert de chaleur côté source.\nBasse pression correspond à cette temp. de saturation.',
+                Language.ENGLISH: 'Refrigerant evaporation point (dew point calculation).\nIndicates source-side heat transfer.\nLow pressure corresponds to this saturation temp.\n\n⚡ GATED: Only updates during steady-state operation.\nStale readings when idle would corrupt operating averages.',
+                Language.POLISH: 'Punkt parowania czynnika chłodniczego (obliczenie punktu rosy).\nWskazuje transfer ciepła po stronie źródłowej.\nNiskie ciśnienie odpowiada tej temp. nasycenia.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.\nNieaktualne odczyty podczas bezczynności zafałszowałyby średnie.',
+                Language.DUTCH: 'Verdampingspunt van koudemiddel (dauwpuntberekening).\nIndicatie van warmteoverdracht bronzijde.\nLage druk correspondeert met deze verzadigingstemp.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.\nVerouderde metingen bij rust zouden gemiddelden verstoren.',
+                Language.GERMAN: 'Verdampfungspunkt des Kältemittels (Taupunktberechnung).\nZeigt Wärmeübertragung quellenseitig.\nNiederdruck entspricht dieser Sättigungstemperatur.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.\nVeraltete Messwerte würden Durchschnitte verfälschen.',
+                Language.FRENCH: 'Point d\'évaporation du réfrigérant (calcul point de rosée).\nIndique le transfert de chaleur côté source.\nBasse pression correspond à cette temp. de saturation.\n\n⚡ GATED: Mises à jour uniquement en régime établi.\nLectures obsolètes fausseraient les moyennes.',
             },
         },
     'condensing_temp': {
@@ -920,6 +920,22 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.DUTCH: 'Condensatiepunt van koudemiddel.\nIndicatie van warmteoverdracht lastzijde.\nTemp. lift (condensatie - verdamping) bepaalt theoretische efficiëntie.',
                 Language.GERMAN: 'Kondensationspunkt des Kältemittels.\nZeigt Wärmeübertragung lastseitig.\nTemperaturhub (Kondensation - Verdampfung) bestimmt theoretische Effizienz.',
                 Language.FRENCH: 'Point de condensation du réfrigérant.\nIndique le transfert de chaleur côté charge.\nL\'écart de temp. (condensation - évaporation) détermine l\'efficacité théorique.',
+            },
+        },
+    'liquid_line_temp': {
+            'name': {
+                Language.ENGLISH: 'Liquid line temp',
+                Language.POLISH: 'Temp linii cieczy',
+                Language.DUTCH: 'Vloeistoflijntemp',
+                Language.GERMAN: 'Flüssigkeitstemp.',
+                Language.FRENCH: 'Temp. ligne liquide',
+            },
+            'description': {
+                Language.ENGLISH: 'Liquid refrigerant temperature before expansion valve (TFL).\nMeasured between condenser outlet and EEV inlet.\n\n⚡ GATED: Only updates during steady-state operation.\nStale readings when idle would corrupt operating averages.',
+                Language.POLISH: 'Temperatura ciekłego czynnika przed zaworem rozprężnym (TFL).\nMierzona między wyjściem skraplacza a wlotem EEV.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.\nNieaktualne odczyty podczas bezczynności zafałszowałyby średnie.',
+                Language.DUTCH: 'Vloeibaar koudemiddeltemperatuur vóór expansieventiel (TFL).\nGemeten tussen condensoruitgang en EEV-inlaat.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.\nVerouderde metingen bij rust zouden gemiddelden verstoren.',
+                Language.GERMAN: 'Flüssiges Kältemittel vor Expansionsventil (TFL).\nGemessen zwischen Kondensatorausgang und EEV-Einlass.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.\nVeraltete Messwerte würden Durchschnitte verfälschen.',
+                Language.FRENCH: 'Température du réfrigérant liquide avant détendeur (TFL).\nMesurée entre sortie condenseur et entrée EEV.\n\n⚡ GATED: Mises à jour uniquement en régime établi.\nLectures obsolètes fausseraient les moyennes.',
             },
         },
     'superheat': {

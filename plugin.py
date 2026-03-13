@@ -73,6 +73,7 @@ Author: Rouzax, 2025 (Refactored)
 """
 
 import DomoticzEx as Domoticz
+import math
 import socket
 import struct
 import time
@@ -172,7 +173,7 @@ class LuxtronikAddress:
     ROOM_TEMP_TARGET = 228
     COMPRESSOR_FREQ = 231
     EVAPORATING_TEMP = 232         # Vapourisation_Temperature
-    CONDENSING_TEMP = 233          # Liquefaction_Temperature
+    LIQUID_LINE_TEMP = 233         # TFL - Liquid refrigerant temp before expansion valve
     TARGET_FREQUENCY = 236         # ID_WEB_Freq_VD_Soll - controller target frequency
     COMPRESSOR_FREQ_MIN = 237      # ID_WEB_Freq_VD_Min - minimum frequency target
     COMPRESSOR_FREQ_MAX = 238      # Freq_VD_Max - maximum frequency
@@ -203,6 +204,7 @@ class ConfigLimits:
     HEARTBEAT_MIN = 10
     HEARTBEAT_MAX = 60
     HEARTBEAT_DEFAULT = 20
+    SETTLING_SECONDS = 120  # Steady-state settling time before gated values are trusted
 
 
 # =============================================================================
@@ -284,17 +286,26 @@ class DebugLogger:
 # Global logger instance
 _logger = DebugLogger()
 
+# Heartbeat interval in seconds (set during onStart, used for settling time calculations)
+_heartbeat_interval: int = ConfigLimits.HEARTBEAT_DEFAULT
+
 
 # =============================================================================
 # Translation Manager (Single Responsibility)
 # =============================================================================
 class TranslationManager:
     """Manages translations for the plugin.
-    
+
     Uses spec_id as the primary key for device translations, eliminating the
     need for separate name_key and description key mappings.
     """
-    
+
+    # Maps current spec_id → old spec_id for devices that were renamed.
+    # Used to detect old translated names so they can be auto-renamed.
+    _RENAMED_SPECS = {
+        'liquid_line_temp': 'condensing_temp',
+    }
+
     LANGUAGE_MAP = {
         '0': Language.ENGLISH,
         '1': Language.POLISH,
@@ -364,23 +375,41 @@ class TranslationManager:
     
     def is_known_device_name(self, name: str, spec_id: str) -> bool:
         """Check if name matches any known translation for the spec_id.
-        
+
         Used to determine if a device name can be safely renamed (it's a known
         translation) vs user-customized (should be left alone).
+        Also checks old spec_id from _RENAMED_SPECS for rename transitions.
         """
-        if spec_id not in self._device_translations:
-            return False
-        
-        names = self._device_translations[spec_id].get('name', {})
-        return name in names.values()
+        if spec_id in self._device_translations:
+            names = self._device_translations[spec_id].get('name', {})
+            if name in names.values():
+                return True
+
+        old_spec_id = self._RENAMED_SPECS.get(spec_id)
+        if old_spec_id and old_spec_id in self._device_translations:
+            old_names = self._device_translations[old_spec_id].get('name', {})
+            if name in old_names.values():
+                return True
+
+        return False
     
     def is_known_description(self, description: str, spec_id: str) -> bool:
-        """Check if description matches any known translation for spec_id."""
-        if spec_id not in self._device_translations:
-            return False
-        
-        descs = self._device_translations[spec_id].get('description', {})
-        return description in descs.values()
+        """Check if description matches any known translation for spec_id.
+
+        Also checks old spec_id from _RENAMED_SPECS for rename transitions.
+        """
+        if spec_id in self._device_translations:
+            descs = self._device_translations[spec_id].get('description', {})
+            if description in descs.values():
+                return True
+
+        old_spec_id = self._RENAMED_SPECS.get(spec_id)
+        if old_spec_id and old_spec_id in self._device_translations:
+            old_descs = self._device_translations[old_spec_id].get('description', {})
+            if description in old_descs.values():
+                return True
+
+        return False
     
     def get_selector_option(self, option_key: str) -> str:
         """Get selector option text for current language."""
@@ -466,45 +495,63 @@ class DataConverter(ABC):
 
 class SteadyStateGateMixin:
     """Mixin providing steady-state gating check with reason reporting.
-    
+
     Uses the controller's minimum frequency target (calc address 237) as the
     gate signal. Returns a reason string if gated, None if gate passes.
-    
+
     Gate Logic:
-    - If min_target_freq <= 0: System is idle, gate closed
-    - If actual_freq < min_target_freq: System is ramping up, gate closed
-    - Otherwise: System at steady-state, gate open
+    - If min_target_freq <= 0: System is idle, gate closed, counter resets
+    - If actual_freq < min_target_freq: System is ramping up, gate closed, counter resets
+    - If freq >= min_target: Increment counter; gate opens only after N consecutive
+      heartbeats where N = ceil(SETTLING_SECONDS / heartbeat_interval)
+
+    The settling requirement ensures thermal equilibrium before trusting readings.
+    Live data showed ~2-3 minutes needed for stabilization after compressor start.
     """
-    
+
+    _steady_count: int = 0
+
     def check_steady_state(self, data_store: DataStore) -> Optional[str]:
         """Check if compressor is at steady-state operating speed.
-        
+
         Returns:
-            None if gate passes (steady-state operation)
-            String with reason if gated (idle or ramping)
+            None if gate passes (steady-state operation for sufficient duration)
+            String with reason if gated (idle, ramping, or settling)
         """
         calc_data = data_store.get('READ_CALCUL', [])
-        
+
         # Ensure we have enough data
         if len(calc_data) <= max(LuxtronikAddress.COMPRESSOR_FREQ, LuxtronikAddress.COMPRESSOR_FREQ_MIN):
+            self._steady_count = 0
             return "insufficient data"
-        
+
         try:
             actual_freq = float(calc_data[LuxtronikAddress.COMPRESSOR_FREQ])
             min_target_freq = float(calc_data[LuxtronikAddress.COMPRESSOR_FREQ_MIN])
-            
+
             # Idle state: min_target is 0
             if min_target_freq <= 0:
+                self._steady_count = 0
                 return f"idle (freq={actual_freq:.0f} Hz, min_target=0)"
-            
+
             # Startup ramp: actual hasn't reached minimum target yet
             if actual_freq < min_target_freq:
+                self._steady_count = 0
                 return f"ramping (freq={actual_freq:.0f} Hz < {min_target_freq:.0f} Hz)"
-            
-            # Gate passes - steady-state operation
+
+            # Frequency is at target — count consecutive heartbeats
+            self._steady_count += 1
+            required = math.ceil(ConfigLimits.SETTLING_SECONDS / _heartbeat_interval)
+
+            if self._steady_count < required:
+                return (f"settling ({self._steady_count}/{required} heartbeats, "
+                        f"freq={actual_freq:.0f} Hz)")
+
+            # Gate passes - steady-state for sufficient duration
             return None
-            
+
         except (IndexError, TypeError, ValueError) as e:
+            self._steady_count = 0
             return f"error checking frequency: {e}"
 
 
@@ -890,35 +937,46 @@ class CycleTracker:
     
     # Minimum cycle duration to record (filters glitches/restarts)
     MIN_CYCLE_MINUTES = 1.0
-    
+    # Maximum plausible cycle duration (24 hours) — anything longer is a
+    # stale value from before a Domoticz/plugin reboot, not a real cycle.
+    MAX_CYCLE_SECONDS = 86400
+
     def __init__(self):
         self.previous_cycle_seconds = 0
-    
+
     def update(self, current_cycle_seconds: int) -> Optional[Dict[str, Any]]:
         """Check for cycle completion and return update dict if detected.
-        
+
         Args:
             current_cycle_seconds: Current cycle time from controller (index 67)
-            
+
         Returns:
             Dict with nValue/sValue when cycle completes (for device update)
             None when cycle is still running (don't update device)
         """
         result = None
-        
+
         # Reset detected: current < previous means timer restarted
         if current_cycle_seconds < self.previous_cycle_seconds:
-            # Previous value was the completed cycle's duration
-            completed_minutes = self.previous_cycle_seconds / 60
-            
-            # Ignore very short "cycles" (glitches, restarts)
-            if completed_minutes >= self.MIN_CYCLE_MINUTES:
-                result = {'nValue': 0, 'sValue': f"{completed_minutes:.0f}"}
+            # Discard if previous value is implausibly large (stale after reboot)
+            if self.previous_cycle_seconds > self.MAX_CYCLE_SECONDS:
                 _logger.log(
-                    f"Cycle completed: {completed_minutes:.0f} min "
-                    f"(prev={self.previous_cycle_seconds}s, curr={current_cycle_seconds}s)",
+                    f"Cycle discarded: previous={self.previous_cycle_seconds}s exceeds "
+                    f"max {self.MAX_CYCLE_SECONDS}s (likely stale after reboot)",
                     DebugLevel.VERBOSE
                 )
+            else:
+                # Previous value was the completed cycle's duration
+                completed_minutes = self.previous_cycle_seconds / 60
+
+                # Ignore very short "cycles" (glitches, restarts)
+                if completed_minutes >= self.MIN_CYCLE_MINUTES:
+                    result = {'nValue': 0, 'sValue': f"{completed_minutes:.0f}"}
+                    _logger.log(
+                        f"Cycle completed: {completed_minutes:.0f} min "
+                        f"(prev={self.previous_cycle_seconds}s, curr={current_cycle_seconds}s)",
+                        DebugLevel.VERBOSE
+                    )
         
         self.previous_cycle_seconds = current_cycle_seconds
         return result
@@ -1079,24 +1137,31 @@ class DeviceUpdateTracker:
         return is_graphing
     
     def _normalize_value(self, value_str: str) -> str:
-        """Normalize a value for comparison."""
+        """Normalize a value for comparison.
+
+        Parses as float and re-formats with consistent precision to prevent
+        false change detection from formatting differences (e.g. "23.40" vs "23.4").
+        """
         if not value_str:
             return ""
-        
+
         value_str = value_str.strip()
         if ';' in value_str:
             value_str = value_str.split(';')[0].strip()
-        
+
         try:
             float_value = float(value_str)
-            decimals = max(len(value_str.split('.')[1]) if '.' in value_str else 0, 1)
-            return f"{float_value:.{decimals}f}"
+            # Use 2 decimal places for all numeric values — enough for pressure (bar)
+            # and COP, while temperatures just get a trailing zero (harmless).
+            # Both old and new values pass through the same normalization, so
+            # the absolute precision doesn't matter — consistency does.
+            return f"{float_value:.2f}"
         except ValueError:
             return value_str.lower()
     
     def needs_update(self, unit, new_values: Dict) -> Tuple[bool, str, str]:
         """Determine if a unit needs updating."""
-        current_time = time.time()
+        current_time = time.monotonic()
         device_id = unit.ID
         is_graphing = self._is_graphing_device(unit)
         
@@ -1153,6 +1218,7 @@ class ConnectionManager:
     
     TIMEOUT = 5
     MAX_ATTEMPTS = 2  # 1 initial attempt + 1 retry
+    MAX_ARRAY_LENGTH = 2000  # Sanity limit for protocol response arrays
     
     def __init__(self, host: str, port: int):
         self.host = host
@@ -1265,6 +1331,9 @@ class ConnectionManager:
                 stat = struct.unpack('!i', self._recv_exact(4))[0]
                 length = struct.unpack('!i', self._recv_exact(4))[0]
             
+            if length > self.MAX_ARRAY_LENGTH:
+                raise Exception(f"Protocol response length {length} exceeds maximum {self.MAX_ARRAY_LENGTH}")
+
             if length > 0:
                 data_list = [struct.unpack('!i', self._recv_exact(4))[0] for _ in range(length)]
             
@@ -2458,14 +2527,18 @@ class LuxtronikPlugin:
                 LuxtronikAddress.DISCHARGE_TEMP, used=1),
             
             # Unit 163: Evaporating temperature (refrigerant evaporation point)
-            DeviceFactory.create_temperature_device(
+            # Gated: meaningless during idle and passive cooling (refrigerant values)
+            DeviceFactory.create_custom_device(
                 163, 'evaporating_temp', 'READ_CALCUL',
-                LuxtronikAddress.EVAPORATING_TEMP, used=1),
-            
-            # Unit 164: Condensing temperature (refrigerant condensation point)
-            DeviceFactory.create_temperature_device(
-                164, 'condensing_temp', 'READ_CALCUL',
-                LuxtronikAddress.CONDENSING_TEMP, used=1),
+                LuxtronikAddress.EVAPORATING_TEMP, '°C', divider=10,
+                gated=True, precision='0.1', used=1),
+
+            # Unit 164: Liquid line temperature (TFL - before expansion valve)
+            # Gated: meaningless during idle and passive cooling (refrigerant values)
+            DeviceFactory.create_custom_device(
+                164, 'liquid_line_temp', 'READ_CALCUL',
+                LuxtronikAddress.LIQUID_LINE_TEMP, '°C', divider=10,
+                gated=True, precision='0.1', used=1),
             
             # Unit 165: Superheat monitoring
             # Gated: stale readings during idle corrupt operating averages
@@ -2887,11 +2960,14 @@ class LuxtronikPlugin:
     
     def onStart(self) -> None:
         """Initialize the plugin."""
-        global _logger, _translator
+        global _logger, _translator, _heartbeat_interval
         
         try:
             # Setup debugging
-            _logger.level = int(Parameters["Mode6"])
+            try:
+                _logger.level = int(Parameters["Mode6"])
+            except (ValueError, TypeError, KeyError):
+                _logger.level = 0
             if _logger.level == DebugLevel.NONE:
                 Domoticz.Debugging(0)   # Silence everything
             elif _logger.level == DebugLevel.ALL:
@@ -2923,9 +2999,13 @@ class LuxtronikPlugin:
             )
             
             # Set heartbeat with validation
-            requested_heartbeat = int(Parameters['Mode2'])
+            try:
+                requested_heartbeat = int(Parameters['Mode2'])
+            except (ValueError, TypeError, KeyError):
+                requested_heartbeat = ConfigLimits.HEARTBEAT_DEFAULT
             heartbeat = self._validate_heartbeat(requested_heartbeat)
             Domoticz.Heartbeat(heartbeat)
+            _heartbeat_interval = heartbeat
             _logger.log(f"Heartbeat set to {heartbeat}s", DebugLevel.BASIC)
             
             # Configure max COP limit
@@ -2965,9 +3045,10 @@ class LuxtronikPlugin:
             self.connection.disable_writes()
             self.connection.close()
         
-        # Clear global references
-        _plugin_ref = None
+        # Clear specs first so any late onCommand() won't find a spec and exits early,
+        # rather than finding a spec but having no plugin reference to execute against.
         _unit_specs.clear()
+        _plugin_ref = None
         
         _logger.log("Plugin stopped", DebugLevel.BASIC)
     
