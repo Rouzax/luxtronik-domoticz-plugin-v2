@@ -906,22 +906,6 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.FRENCH: 'Point d\'évaporation du réfrigérant (calcul point de rosée).\nIndique le transfert de chaleur côté source.\nBasse pression correspond à cette temp. de saturation.\n\n⚡ GATED: Mises à jour uniquement en régime établi.\nLectures obsolètes fausseraient les moyennes.',
             },
         },
-    'condensing_temp': {
-            'name': {
-                Language.ENGLISH: 'Condensing temp',
-                Language.POLISH: 'Temp skraplania',
-                Language.DUTCH: 'Condensatietemp',
-                Language.GERMAN: 'Kondensationstemp.',
-                Language.FRENCH: 'Temp. condensation',
-            },
-            'description': {
-                Language.ENGLISH: 'Refrigerant condensation point.\nIndicates load-side heat transfer.\nThe temp lift (condensing - evaporating) determines theoretical efficiency.',
-                Language.POLISH: 'Punkt skraplania czynnika chłodniczego.\nWskazuje transfer ciepła po stronie odbiornika.\nSkok temp. (skraplanie - parowanie) określa wydajność teoretyczną.',
-                Language.DUTCH: 'Condensatiepunt van koudemiddel.\nIndicatie van warmteoverdracht lastzijde.\nTemp. lift (condensatie - verdamping) bepaalt theoretische efficiëntie.',
-                Language.GERMAN: 'Kondensationspunkt des Kältemittels.\nZeigt Wärmeübertragung lastseitig.\nTemperaturhub (Kondensation - Verdampfung) bestimmt theoretische Effizienz.',
-                Language.FRENCH: 'Point de condensation du réfrigérant.\nIndique le transfert de chaleur côté charge.\nL\'écart de temp. (condensation - évaporation) détermine l\'efficacité théorique.',
-            },
-        },
     'liquid_line_temp': {
             'name': {
                 Language.ENGLISH: 'Liquid line temp',
@@ -986,6 +970,55 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.FRENCH: 'Pression du réfrigérant à l\'évaporateur (côté froid).\nLiée à la température source (sol/air).\nIndique l\'absorption de chaleur.\n\n⚡ GATED: Mises à jour uniquement en régime établi.\nS\'équilibre avec l\'ambiant au repos.',
             },
         },
+
+    'condensing_temp': {
+            'name': {
+                Language.ENGLISH: 'Condensing temp',
+                Language.DUTCH: 'Condensatietemp',
+                Language.GERMAN: 'Kondensationstemp.',
+                Language.FRENCH: 'Temp. condensation',
+                Language.POLISH: 'Temp skraplania',
+            },
+            'description': {
+                Language.ENGLISH: 'Refrigerant condensation temperature (hot side).\nDerived from firmware calculation at condenser.\nUsed with liquid line temp to calculate subcooling.\n\n⚡ GATED: Only updates during steady-state operation.',
+            },
+    },
+    'subcooling': {
+            'name': {
+                Language.ENGLISH: 'Subcooling',
+                Language.DUTCH: 'Onderkoeling',
+                Language.GERMAN: 'Unterkühlung',
+                Language.FRENCH: 'Sous-refroidissement',
+                Language.POLISH: 'Dochłodzenie',
+            },
+            'description': {
+                Language.ENGLISH: 'Difference between condensing temp and liquid line temp.\nIndicates refrigerant charge health.\nTrending changes may signal refrigerant loss or restriction.\n\n⚡ GATED: Only updates during steady-state operation.',
+            },
+    },
+    'condensing_pressure': {
+            'name': {
+                Language.ENGLISH: 'Condensing pressure',
+                Language.DUTCH: 'Condensatiedruk',
+                Language.GERMAN: 'Kondensationsdruck',
+                Language.FRENCH: 'Pression condensation',
+                Language.POLISH: 'Ciśnienie skraplania',
+            },
+            'description': {
+                Language.ENGLISH: 'Condensing pressure from firmware calculation.\nCompanion to high pressure (LIN bus transducer).\n\n⚡ GATED: Only updates during steady-state operation.\nEquilibrates to ambient when idle.',
+            },
+    },
+    'cooling_release_timer': {
+            'name': {
+                Language.ENGLISH: 'Cooling release',
+                Language.DUTCH: 'Vrijgave koeling',
+                Language.GERMAN: 'Kühlfreigabe',
+                Language.FRENCH: 'Libération refroid.',
+                Language.POLISH: 'Zwolnienie chłodz.',
+            },
+            'description': {
+                Language.ENGLISH: 'Countdown timer showing when cooling mode will be permitted.\nDisplays remaining time in minutes.',
+            },
+    },
 
     # =========================================================================
     # GROUP 13: STATISTICS & COUNTERS (Units 180-185)

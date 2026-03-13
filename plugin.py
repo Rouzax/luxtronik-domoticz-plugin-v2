@@ -182,8 +182,11 @@ class LuxtronikAddress:
     HEATING_PUMP_SPEED = 241
     HEATING_SPREAD_TARGET = 242    # HUP_Temp_Spread_Soll
     HEATING_SPREAD_ACTUAL = 243    # HUP_Temp_Spread_Ist
+    CONDENSING_PRESSURE = 252       # Condensing pressure (bar/100) - from firmware
     HEAT_OUTPUT = 257
+    CONDENSING_TEMP = 258           # Condensing temperature (°C/10) - from firmware
     PASSIVE_COOLING_FLAG = 259
+    COOLING_RELEASE_TIMER = 260     # Cooling release countdown timer (seconds)
     POWER_TOTAL = 268
     
     # READ_PARAMS addresses (configuration parameters)
@@ -2560,7 +2563,29 @@ class LuxtronikPlugin:
                 167, 'low_pressure', 'READ_CALCUL', 
                 LuxtronikAddress.LOW_PRESSURE, 'bar', divider=100, gated=True, used=1),
             
-            # Units 168-179: Reserved for future refrigerant devices
+            # Unit 168: Condensing temperature (from firmware calculation)
+            # Gated: meaningless during idle (refrigerant equilibrates)
+            DeviceFactory.create_custom_device(
+                168, 'condensing_temp', 'READ_CALCUL',
+                LuxtronikAddress.CONDENSING_TEMP, '°C', divider=10,
+                gated=True, precision='0.1', used=0),
+
+            # Unit 169: Subcooling (condensing temp - liquid line temp)
+            # Indicates refrigerant charge health. Trending changes signal issues.
+            # Gated: only meaningful during steady-state operation
+            DeviceFactory.create_temp_diff_device(
+                169, 'subcooling', 'READ_CALCUL',
+                [LuxtronikAddress.CONDENSING_TEMP, LuxtronikAddress.LIQUID_LINE_TEMP],
+                gated=True, used=0),
+
+            # Unit 170: Condensing pressure (from firmware calculation)
+            # Gated: equilibrates to ambient when off
+            DeviceFactory.create_custom_device(
+                170, 'condensing_pressure', 'READ_CALCUL',
+                LuxtronikAddress.CONDENSING_PRESSURE, 'bar', divider=100,
+                gated=True, used=0),
+
+            # Units 171-179: Reserved for future refrigerant devices
             
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 13: STATISTICS & COUNTERS (Units 180-199)
@@ -2620,7 +2645,14 @@ class LuxtronikPlugin:
                 201, 'cooling_permitted', 'READ_CALCUL',
                 LuxtronikAddress.COOLING_PERMITTED, used=0, image=16),
             
-            # Units 202-209: Reserved for future diagnostics
+            # Unit 202: Cooling release countdown timer
+            # Shows remaining time before cooling mode is permitted
+            DeviceFactory.create_custom_device(
+                202, 'cooling_release_timer', 'READ_CALCUL',
+                LuxtronikAddress.COOLING_RELEASE_TIMER, 'min', divider=60,
+                used=0, image=21),
+
+            # Units 203-209: Reserved for future diagnostics
         ]
      
     def create_devices(self) -> None:
