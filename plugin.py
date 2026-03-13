@@ -31,8 +31,9 @@ Author: Rouzax, 2025 (Refactored)
         </ul>
         
         <h3>COP Accuracy Note:</h3>
-        <p>For accurate COP (Coefficient of Performance) averages over time, enable: <b>Settings → Log History → 'Only add newly received values to the Log'</b></p>
-        <p>When disabled, Domoticz fills in the last received value every 5 minutes even when the heat pump is idle, skewing COP averages. When enabled, no values are logged during idle periods, giving accurate daily/monthly averages.</p>
+        <p>For accurate COP averages over time, enable: <b>Settings → Log History → 'Only add newly received values to the Log'</b></p>
+        <p>When disabled, Domoticz fills in the last received value every 5 minutes even when the heat pump is idle, skewing COP averages.</p>
+        <p>The controller's power reading only measures compressor power. Enable <b>Pump Power Compensation</b> to include estimated circulation pump power for true system COP.</p>
     </description>
     <params>
         <param field="Address" label="Heat Pump IP Address" width="200px" required="true" default="127.0.0.1">
