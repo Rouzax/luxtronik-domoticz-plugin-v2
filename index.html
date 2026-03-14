@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Luxtronik Domoticz Plugin v2</title>
-    <meta name="description" content="Real-time heat pump monitoring and control for Domoticz. 62 devices, 5 languages, smart COP tracking.">
+    <meta name="description" content="Real-time heat pump monitoring and control for Domoticz. 65+ devices, 5 languages, smart COP tracking.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -32,11 +32,11 @@
     <section id="stats" class="stats">
         <div class="container stats__grid">
             <div class="stats__item">
-                <span class="stats__number">62</span>
+                <span class="stats__number">65+</span>
                 <span class="stats__label">Devices &amp; Sensors</span>
             </div>
             <div class="stats__item">
-                <span class="stats__number">5</span>
+                <span class="stats__number stats__number--flags">&#x1F1EC;&#x1F1E7; &#x1F1F3;&#x1F1F1; &#x1F1E9;&#x1F1EA; &#x1F1EB;&#x1F1F7; &#x1F1F5;&#x1F1F1;</span>
                 <span class="stats__label">Languages</span>
             </div>
             <div class="stats__item">
@@ -76,14 +76,24 @@
                     <p class="feature-card__desc">Run multiple plugin instances for homes with more than one heat pump, each fully independent.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-card__icon">&#x1F310;</div>
+                    <div class="feature-card__icon feature-card__icon--flags">&#x1F1EC;&#x1F1E7; &#x1F1F3;&#x1F1F1; &#x1F1E9;&#x1F1EA; &#x1F1EB;&#x1F1F7; &#x1F1F5;&#x1F1F1;</div>
                     <h3 class="feature-card__title">5 Languages</h3>
-                    <p class="feature-card__desc">Full translations for EN, NL, DE, FR, and PL &mdash; including device names, descriptions, and selector options.</p>
+                    <p class="feature-card__desc">Full translations for English, Dutch, German, French, and Polish &mdash; device names, descriptions, and selector options.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-card__icon">&#x1F517;</div>
                     <h3 class="feature-card__title">Stable Device IDs</h3>
                     <p class="feature-card__desc">Hardware-based identifiers that persist across IP changes and device renames &mdash; no more broken history.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card__icon">&#x2699;</div>
+                    <h3 class="feature-card__title">Pump Power Compensation</h3>
+                    <p class="feature-card__desc">Configurable pump power estimates added to COP calculations for more accurate real-world efficiency numbers.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card__icon">&#x1F321;</div>
+                    <h3 class="feature-card__title">Refrigerant Diagnostics</h3>
+                    <p class="feature-card__desc">Full refrigerant circuit monitoring &mdash; superheat, subcooling, pressures, and temperatures for deep system insight.</p>
                 </div>
             </div>
         </div>
@@ -92,7 +102,7 @@
     <!-- Device Cards -->
     <section id="devices" class="devices">
         <div class="container">
-            <h2 class="section__title">62 Devices at Your Fingertips</h2>
+            <h2 class="section__title">65+ Devices at Your Fingertips</h2>
 
             <h3 class="devices__group-label">Efficiency &amp; Power</h3>
             <div class="devices__grid">
@@ -376,7 +386,7 @@
                 <a href="https://github.com/Rouzax/luxtronik-domoticz-plugin-v2/releases">Releases</a>
                 <a href="https://github.com/Rouzax/luxtronik-domoticz-plugin-v2/issues">Issues</a>
             </nav>
-            <span class="footer__version">v2.0.2</span>
+            <span class="footer__version">v2.0.4</span>
         </div>
     </footer>
 
