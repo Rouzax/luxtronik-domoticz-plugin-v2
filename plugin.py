@@ -3013,6 +3013,8 @@ class LuxtronikPlugin:
         Quadratic is a reasonable middle ground between linear (overestimates)
         and cubic affinity law (underestimates for ECM pumps).
         """
+        if speed_pct <= 0:
+            return 0.0
         fraction = max(0.0, min(1.0, speed_pct / 100.0))
         return p_min + (p_max - p_min) * fraction * fraction
 
