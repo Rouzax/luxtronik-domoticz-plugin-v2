@@ -187,6 +187,13 @@ img { max-width: 100%; height: auto; display: block; }
     letter-spacing: 0.05em;
 }
 
+.stats__number--flags {
+    font-size: clamp(0.9rem, 2vw, 1.3rem);
+    letter-spacing: 0.15em;
+    filter: grayscale(0.3) brightness(0.9);
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
 .stats__number--animated {
     opacity: 0;
     transition: opacity 0.8s ease-out;
@@ -238,6 +245,13 @@ img { max-width: 100%; height: auto; display: block; }
 .feature-card__icon {
     font-size: 1.8rem;
     margin-bottom: 0.75rem;
+}
+
+.feature-card__icon--flags {
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    filter: grayscale(0.35) brightness(0.85);
+    line-height: 1.8;
 }
 
 .feature-card__title {
