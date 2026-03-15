@@ -151,6 +151,67 @@ Suffixes: `407` = R407C refrigerant, `REV` = reversible (cooling capable), `S` =
 
 **Refrigerant:** Not reliably detectable from protocol (only some codes have the `407` suffix). User selects via dropdown. Default R407C.
 
+## Refrigerant Profiles
+
+Most health scoring is relative (vs baseline, % change, year-over-year). However, a few metrics benefit from refrigerant-specific parameters:
+
+```python
+REFRIGERANT_PROFILES = {
+    'r407c': {'discharge_max': 105, 'glide': 5.0, 'subcooling_sensitivity': 1.0},
+    'r410a': {'discharge_max': 120, 'glide': 0.1, 'subcooling_sensitivity': 1.0},
+    'r32':   {'discharge_max': 130, 'glide': 1.0, 'subcooling_sensitivity': 1.0},
+    'r290':  {'discharge_max': 100, 'glide': 0.0, 'subcooling_sensitivity': 1.5},
+    'r134a': {'discharge_max': 110, 'glide': 0.0, 'subcooling_sensitivity': 1.0},
+}
+```
+
+### What each parameter does
+
+**`discharge_max` (°C):** Absolute discharge temperature ceiling. Added as a sub-metric in the Compressor category. Approaching this limit indicates compressor stress regardless of baseline trends. Different refrigerants have different thermal decomposition limits.
+
+| Refrigerant | Discharge ceiling | Why |
+|-------------|-------------------|-----|
+| R407C | 105°C | Lower thermal stability |
+| R410A | 120°C | Higher pressure, hotter operation |
+| R32 | 130°C | Highest discharge temps of common refrigerants |
+| R290 | 100°C | Conservative limit for flammable refrigerant |
+| R134a | 110°C | Moderate |
+
+**`glide` (K):** Temperature glide between bubble point and dew point. Affects interpretation of superheat and subcooling:
+- Superheat is measured against dew point (suction side)
+- Subcooling is measured against bubble point (liquid side)
+- R407C has ~5K glide — the controller may or may not account for this internally
+- Used in report text to contextualize readings, and for pressure-temperature consistency checks
+
+**`subcooling_sensitivity`:** Multiplier on subcooling drop thresholds. Systems with smaller refrigerant charges (R290 propane systems typically have very low charge due to flammability limits) are more sensitive to charge loss. A 1K subcooling drop on an R290 system is more concerning than on a large R407C charge.
+
+### Impact on scoring
+
+| Category | What changes per refrigerant |
+|----------|------------------------------|
+| Refrigerant Health | Subcooling drop thresholds scaled by `subcooling_sensitivity` |
+| Compressor | Discharge temp absolute ceiling from `discharge_max` |
+| Report text | Glide context, refrigerant-specific interpretation notes |
+| All other metrics | Universal — relative comparisons, no refrigerant dependency |
+
+### Scoring: Discharge Temperature Ceiling (added to Compressor category)
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| Discharge temp vs ceiling | <80% of max | 80-90% | 90-95% | >95% |
+
+Example for R407C (max 105°C): 100 = <84°C, 70 = 84-95°C, 40 = 95-100°C, 0 = >100°C
+
+### Scoring: Subcooling (adjusted)
+
+Base thresholds scaled by `subcooling_sensitivity`:
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| Subcooling vs baseline | Within 1K/s | 1-2K/s drop | 2-3K/s drop | >3K/s drop |
+
+Where `s` = `subcooling_sensitivity`. For R290 (s=1.5): 100 = within 0.67K, 70 = 0.67-1.33K drop, etc.
+
 ## Data Collection
 
 Every heartbeat, the plugin feeds relevant values to the accumulator. Only steady-state readings are sampled for gated metrics.
@@ -255,6 +316,7 @@ Welford's online algorithm: one pass, no raw data stored. Each metric needs coun
 | Avg cycle length | >1.5 h | 1.0-1.5 h | 0.5-1.0 h | <0.5 h |
 | Starts per runtime hour | <0.7 | 0.7-1.0 | 1.0-1.5 | >1.5 |
 | Discharge temp vs baseline | Within 3°C | 3-6°C rise | 6-10°C rise | >10°C rise |
+| Discharge temp vs ceiling | <80% of max | 80-90% | 90-95% | >95% (refrigerant-specific) |
 
 ### System (10%)
 
