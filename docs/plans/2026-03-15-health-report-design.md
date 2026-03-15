@@ -352,17 +352,23 @@ Refrigerant pressure thresholds are refrigerant-specific but superheat/subcoolin
 
 ## Report Output
 
-### HTML Report
+### Single HTML File
 
-Self-contained HTML with inline CSS. Saved to `reports/health-YYYY-MM.html` alongside plugin.py.
+One self-contained file — `health.html` alongside plugin.py — regenerated from `health_state.json` on every report trigger. Contains all months in one browsable page. No external dependencies, inline CSS/JS.
 
-**Sections:**
-1. Header — system info, report date, overall score with color badge
-2. Score breakdown — 5 category cards: score, trend arrow (↑↓→), worst sub-metric
-3. Monthly trend table — last 12 months of key metrics
-4. Detail sections — one per category with data, thresholds, recommended actions
-5. Counter summary — runtime deltas, cycle stats
-6. Footer — generation time, data coverage, next scheduled report
+The HTML is a **view**, not the data store. If `health.html` is corrupted or deleted, it's regenerated from the JSON with no data loss. The JSON is the single source of truth.
+
+**Page structure:**
+1. Header — system info, current score with color badge
+2. Score timeline — compact chart showing 12 months of health scores (trend at a glance)
+3. Current month — full detail expanded by default
+   - Score breakdown: 5 category cards with score, trend arrow (↑↓→), worst sub-metric
+   - Detail sections: one per category with data, thresholds, recommended actions
+   - Counter summary: runtime deltas, cycle stats
+4. Previous months — collapsible accordion sections, click to expand any month
+5. Footer — generation time, settings used, data coverage
+
+**File size:** ~50-100KB for 13 months of data with inline styling. Trivial.
 
 ### Domoticz Devices
 
@@ -371,12 +377,13 @@ Shows: `94 - Healthy (Mar 2026)` or `62 - Watch: Superheat drifting high (Mar 20
 Numeric prefix enables graphing the score over time.
 
 **Unit 211 — Generate Report (On/Off button, Group 14: Diagnostics, writable)**
-User clicks On → report generates → device resets to Off.
+User clicks On → report regenerates from JSON → device resets to Off.
 
 ### Triggers
 
 - Scheduled: 1st of each month (or quarter), first heartbeat
 - On-demand: Unit 211 button press
+- Both regenerate the full `health.html` from current JSON state
 
 ## Integration with plugin.py
 
