@@ -246,7 +246,7 @@ Welford's online algorithm: one pass, no raw data stored. Each metric needs coun
 
 ## Persistence
 
-**File:** `health_state.json` alongside plugin.py
+**File:** `health_state_hw{HardwareID}.json` alongside plugin.py (per-instance to support multi-instance setups)
 
 **Structure:**
 ```json
@@ -354,7 +354,7 @@ Refrigerant pressure thresholds are refrigerant-specific but superheat/subcoolin
 
 ### Single HTML File
 
-One self-contained file — `health.html` alongside plugin.py — regenerated from `health_state.json` on every report trigger. Contains all months in one browsable page. No external dependencies, inline CSS/JS.
+One self-contained file — `health_hw{HardwareID}.html` alongside plugin.py — regenerated from the state JSON on every report trigger. Contains all months in one browsable page. No external dependencies, inline CSS/JS.
 
 The HTML is a **view**, not the data store. If `health.html` is corrupted or deleted, it's regenerated from the JSON with no data loss. The JSON is the single source of truth.
 
