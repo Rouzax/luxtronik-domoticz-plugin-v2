@@ -1,0 +1,327 @@
+# Auto Health Report — Design Document
+
+## Overview
+
+Automatic health monitoring and reporting for the Luxtronik heat pump plugin. Accumulates real-time statistics into monthly buckets, scores system health across 5 weighted categories, and generates self-contained HTML reports.
+
+## Architecture
+
+**Approach:** Separate module (`health_monitor.py`) alongside plugin.py, following the `translations.py` pattern.
+
+**Components:**
+- `StatsAccumulator` — collects per-heartbeat data into monthly buckets using Welford's online algorithm
+- `HealthScorer` — calculates category scores from accumulated stats
+- `ReportGenerator` — produces self-contained HTML reports
+
+**Integration:** Plugin.py gets minimal changes — import, 2 new devices, `feed()` call in heartbeat, save on stop.
+
+## Plugin Settings Architecture
+
+### Dual-mode: Extended Settings with Legacy Fallback
+
+The Domoticz extended plugin settings PR adds support for `<group>`, `type="number"`, `type="boolean"`, `visible_when`, and `<slider>` fields. Settings are accessed via a `Settings` JSON dict (separate from `Parameters`).
+
+Legacy Domoticz silently ignores `<group>` elements — no errors.
+
+**Strategy:**
+- Core settings (Address, Port, Mode1-3, Mode6) remain as legacy params — they work fine
+- Pump power compensation moves to extended settings only (drop Mode4/Mode5)
+- Health monitor configuration uses extended settings only
+- Legacy Domoticz: health monitor runs with defaults and auto-detection, no pump power compensation UI
+
+**Detection:**
+```python
+def _has_extended_settings(self) -> bool:
+    try:
+        return isinstance(Settings, dict) and len(Settings) > 0
+    except NameError:
+        return False
+```
+
+### XML Definition
+
+```xml
+<params>
+    <!-- Core settings (legacy, always work) -->
+    <param field="Address" label="Heat Pump IP Address" width="200px" required="true" default="127.0.0.1"/>
+    <param field="Port" label="Heat Pump Port" width="60px" required="true" default="8889"/>
+    <param field="Mode1" label="Max COP Value" width="75px" required="false" default="30"/>
+    <param field="Mode2" label="Update Interval" width="150px" required="true" default="20"/>
+    <param field="Mode3" label="Language" width="150px">...</param>
+    <param field="Mode6" label="Debug Level" width="150px">...</param>
+
+    <!-- Extended: Pump Power Compensation -->
+    <group label="Pump Power Compensation">
+        <param field="PumpCompEnabled" type="boolean"
+               label="Enable Pump Power Compensation" default="false"/>
+        <param field="HUPMin" type="number" label="HUP Min (W)"
+               min="0" max="500" default="2" visible_when="PumpCompEnabled=true"/>
+        <param field="HUPMax" type="number" label="HUP Max (W)"
+               min="0" max="500" default="60" visible_when="PumpCompEnabled=true"/>
+        <param field="VBOMin" type="number" label="VBO Min (W)"
+               min="0" max="500" default="3" visible_when="PumpCompEnabled=true"/>
+        <param field="VBOMax" type="number" label="VBO Max (W)"
+               min="0" max="500" default="140" visible_when="PumpCompEnabled=true"/>
+    </group>
+
+    <!-- Extended: Health Monitor -->
+    <group label="Health Monitor">
+        <param field="HealthEnabled" type="boolean"
+               label="Enable Health Monitoring" default="true"/>
+        <param field="SystemType" label="System Type"
+               visible_when="HealthEnabled=true">
+            <options>
+                <option label="Ground Source (Brine)" value="ground" default="true"/>
+                <option label="Air Source" value="air"/>
+            </options>
+        </param>
+        <param field="Refrigerant" label="Refrigerant"
+               visible_when="HealthEnabled=true">
+            <options>
+                <option label="R407C" value="r407c" default="true"/>
+                <option label="R410A" value="r410a"/>
+                <option label="R32" value="r32"/>
+                <option label="R290 (Propane)" value="r290"/>
+            </options>
+        </param>
+        <param field="ReportSchedule" label="Report Schedule"
+               visible_when="HealthEnabled=true">
+            <options>
+                <option label="Monthly" value="monthly" default="true"/>
+                <option label="Quarterly" value="quarterly"/>
+            </options>
+        </param>
+    </group>
+</params>
+```
+
+### Settings Normalization
+
+```python
+def _load_settings(self) -> dict:
+    if self._has_extended_settings():
+        return {
+            'pump_enabled': Settings.get('PumpCompEnabled', 'false') == 'true',
+            'hup_min': float(Settings.get('HUPMin', '2')),
+            'hup_max': float(Settings.get('HUPMax', '60')),
+            'vbo_min': float(Settings.get('VBOMin', '3')),
+            'vbo_max': float(Settings.get('VBOMax', '140')),
+            'health_enabled': Settings.get('HealthEnabled', 'true') == 'true',
+            'system_type': Settings.get('SystemType', 'ground'),
+            'refrigerant': Settings.get('Refrigerant', 'r407c'),
+            'report_schedule': Settings.get('ReportSchedule', 'monthly'),
+        }
+    else:
+        return {
+            'pump_enabled': False,
+            'hup_min': 2, 'hup_max': 60,
+            'vbo_min': 3, 'vbo_max': 140,
+            'health_enabled': True,
+            'system_type': 'ground',  # Auto-detect from data
+            'refrigerant': 'r407c',
+            'report_schedule': 'monthly',
+        }
+```
+
+## Data Collection
+
+Every heartbeat, the plugin feeds relevant values to the accumulator. Only steady-state readings are sampled for gated metrics.
+
+### Tracked Metrics (per monthly bucket)
+
+| Metric | Aggregation | Source | Gated? |
+|--------|------------|--------|--------|
+| COP heating/DHW/total | min, max, mean, count, stddev | heat_output / power_total | Yes |
+| Superheat | min, max, mean, count, bins (0-3K, 3-10K, 10K+) | calc[165] | Yes |
+| Subcooling | min, max, mean, count | calc[169] | Yes |
+| High/low pressure | min, max, mean | calc[166], calc[167] | Yes |
+| Discharge temp | min, max, mean | calc[160] | Yes |
+| Source inlet/outlet | min, max, mean | calc[19], calc[20] | No |
+| Source ΔT | min, max, mean | calc[102] | During operation |
+| HUP/VBO speed | min, max, mean | calc[241], calc[183] | When >0 |
+| Compressor frequency | min, max, mean | calc[140] | When >0 |
+| Outside temp | min, max, mean | calc[90] | No |
+
+### Counter Snapshots (at month rollover)
+
+| Counter | Source |
+|---------|--------|
+| Compressor hours | calc[56] |
+| Compressor starts | calc[57] |
+| Heating/DHW/Cooling hours | calc[64,65,66] |
+| Error count | calc[105] |
+
+### Running Statistics
+
+Welford's online algorithm: one pass, no raw data stored. Each metric needs count, mean, M2 (for stddev), min, max. Superheat adds 3 bin counters. ~20 metrics × 5 values × 13 months ≈ 1300 numbers total.
+
+## Persistence
+
+**File:** `health_state.json` alongside plugin.py
+
+**Structure:**
+```json
+{
+  "version": 1,
+  "system": {
+    "model": "WZSV 92K3M",
+    "first_seen": "2026-03-14"
+  },
+  "baselines": {
+    "cop_heating_ref": 11.4,
+    "superheat_mean_ref": 5.6,
+    "source_inlet_mean_ref": 13.3,
+    "set_from_month": "2026-12"
+  },
+  "monthly_buckets": {
+    "2026-03": {
+      "cop_heating": {"count": 4523, "mean": 11.2, "m2": 234.5, "min": 8.1, "max": 16.2},
+      "superheat": {"count": 4523, "mean": 5.8, "m2": 89.2, "min": 1.2, "max": 12.1, "bins": [498, 3012, 1013]},
+      "counters": {"compressor_hours": 9102, "compressor_starts": 3801}
+    }
+  },
+  "last_report": "2026-03-01T00:00:00"
+}
+```
+
+**Behaviors:**
+- Save frequency: hourly
+- Bucket rollover: on calendar month change, finalize and snapshot counters
+- Retention: 13 months (oldest pruned when 14th appears)
+- Baselines: auto-set from first full month, can be re-baselined
+- Corruption resilience: write to temp file, atomic rename; corrupt/missing → start fresh
+
+## Health Scoring
+
+5 weighted categories, each scored 0-100. Category score = worst sub-metric. Overall = weighted average.
+
+### Refrigerant Health (30%)
+
+| Sub-metric | 100 (healthy) | 70 (watch) | 40 (concern) | 0 (critical) |
+|-----------|--------------|------------|--------------|--------------|
+| Superheat mean | 4-8 K | 3-4 or 8-10 K | 2-3 or 10-12 K | <2 or >12 K |
+| Superheat % in optimal range | >60% | 40-60% | 25-40% | <25% |
+| Subcooling vs baseline | Within 1K | 1-2K drop | 2-3K drop | >3K drop |
+| Pressure ratio | 2.0-3.0 | 1.8-2.0 or 3.0-3.5 | 1.5-1.8 or 3.5-4.0 | <1.5 or >4.0 |
+
+### Efficiency (25%)
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| COP heating vs baseline | Within 10% | 10-20% drop | 20-30% drop | >30% drop |
+| COP DHW vs baseline | Within 10% | 10-20% drop | 20-30% drop | >30% drop |
+| COP heating vs same month last year | Within 10% | 10-20% drop | 20-30% drop | >30% drop |
+
+### Ground Loop (20%)
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| Source inlet vs same month last year | Within 1°C | 1-2°C drop | 2-3°C drop | >3°C drop |
+| Source ΔT mean | <4.5 K | 4.5-5.5 K | 5.5-6.5 K | >6.5 K |
+| Pump speed trend (HUP+VBO) | Stable (±5%) | 5-15% increase | 15-25% increase | >25% increase |
+
+### Compressor (15%)
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| Avg cycle length | >1.5 h | 1.0-1.5 h | 0.5-1.0 h | <0.5 h |
+| Starts per runtime hour | <0.7 | 0.7-1.0 | 1.0-1.5 | >1.5 |
+| Discharge temp vs baseline | Within 3°C | 3-6°C rise | 6-10°C rise | >10°C rise |
+
+### System (10%)
+
+| Sub-metric | 100 | 70 | 40 | 0 |
+|-----------|-----|----|----|---|
+| New errors this month | 0 | 1-2 | 3-5 | >5 |
+| DHW share of runtime | <45% | 45-55% | 55-65% | >65% |
+
+### Score Interpretation
+
+| Score | Label | Color |
+|-------|-------|-------|
+| 90-100 | Healthy | Green |
+| 70-89 | Good | Green |
+| 50-69 | Watch | Yellow |
+| 30-49 | Concern | Orange |
+| 0-29 | Critical | Red |
+
+### Missing Data
+
+Metrics without data are excluded; remaining sub-metrics reweighted. Entire categories without data have their weight redistributed proportionally.
+
+### System Type Profiles
+
+**Ground source:** All 5 categories active as described above.
+
+**Air source:** Ground Loop category replaces source-specific metrics with:
+- COP vs outdoor temp normalization (instead of flat baseline comparison)
+- Defrost frequency tracking (replaces source temp YoY)
+- Fan speed trending (replaces VBO pump speed)
+
+Refrigerant pressure thresholds are refrigerant-specific but superheat/subcooling ranges are broadly similar across types.
+
+## Report Output
+
+### HTML Report
+
+Self-contained HTML with inline CSS. Saved to `reports/health-YYYY-MM.html` alongside plugin.py.
+
+**Sections:**
+1. Header — system info, report date, overall score with color badge
+2. Score breakdown — 5 category cards: score, trend arrow (↑↓→), worst sub-metric
+3. Monthly trend table — last 12 months of key metrics
+4. Detail sections — one per category with data, thresholds, recommended actions
+5. Counter summary — runtime deltas, cycle stats
+6. Footer — generation time, data coverage, next scheduled report
+
+### Domoticz Devices
+
+**Unit 210 — Health Score (text device, Group 14: Diagnostics)**
+Shows: `94 - Healthy (Mar 2026)` or `62 - Watch: Superheat drifting high (Mar 2026)`
+Numeric prefix enables graphing the score over time.
+
+**Unit 211 — Generate Report (On/Off button, Group 14: Diagnostics, writable)**
+User clicks On → report generates → device resets to Off.
+
+### Triggers
+
+- Scheduled: 1st of each month (or quarter), first heartbeat
+- On-demand: Unit 211 button press
+
+## Integration with plugin.py
+
+### Changes Required
+
+1. `import json, os` and `from health_monitor import HealthMonitor`
+2. Two new devices in `_build_device_specs()` (Units 210, 211)
+3. `HealthMonitor` instance in `__init__`
+4. `health_monitor.load()` in `onStart`
+5. `health_monitor.feed(data_store)` after device updates in `_update_all_devices`
+6. `health_monitor.save()` in `onStop`
+7. Unit 211 `onDeviceModified` triggers `health_monitor.generate_report()`
+8. Settings normalization via `_load_settings()` with extended/legacy detection
+9. Remove Mode4/Mode5 params from XML (pump compensation moves to extended settings only)
+
+### Interface
+
+```python
+class HealthMonitor:
+    def load(self, state_dir: str, settings: dict) -> None: ...
+    def feed(self, data_store: DataStore) -> None: ...
+    def generate_report(self) -> Tuple[int, str]: ...  # (score, summary_text)
+    def save(self) -> None: ...
+```
+
+## Migration
+
+When upgrading from legacy to extended Domoticz:
+- Mode4/Mode5 pump compensation settings are lost
+- User re-enables in new UI (5 seconds — tick checkbox, defaults are correct)
+- Health monitor starts fresh with data accumulation
+- No migration code needed
+
+## Notes
+
+- R407C refrigerant (1.25 kg charge) — default thresholds based on WZSV 92K3M baseline data
+- Pump speed trending covers both HUP and VBO under Ground Loop category
+- Air source profile is designed but not implemented in v1 — ground source only initially
