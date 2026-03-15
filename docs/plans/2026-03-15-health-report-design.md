@@ -68,10 +68,11 @@ def _has_extended_settings(self) -> bool:
     <group label="Health Monitor">
         <param field="HealthEnabled" type="boolean"
                label="Enable Health Monitoring" default="true"/>
-        <param field="SystemType" label="System Type"
+        <param field="SystemTypeOverride" label="System Type Override"
                visible_when="HealthEnabled=true">
             <options>
-                <option label="Ground Source (Brine)" value="ground" default="true"/>
+                <option label="Auto-detect" value="auto" default="true"/>
+                <option label="Ground Source (Brine)" value="ground"/>
                 <option label="Air Source" value="air"/>
             </options>
         </param>
@@ -82,6 +83,7 @@ def _has_extended_settings(self) -> bool:
                 <option label="R410A" value="r410a"/>
                 <option label="R32" value="r32"/>
                 <option label="R290 (Propane)" value="r290"/>
+                <option label="R134a" value="r134a"/>
             </options>
         </param>
         <param field="ReportSchedule" label="Report Schedule"
@@ -107,7 +109,7 @@ def _load_settings(self) -> dict:
             'vbo_min': float(Settings.get('VBOMin', '3')),
             'vbo_max': float(Settings.get('VBOMax', '140')),
             'health_enabled': Settings.get('HealthEnabled', 'true') == 'true',
-            'system_type': Settings.get('SystemType', 'ground'),
+            'system_type_override': Settings.get('SystemTypeOverride', 'auto'),
             'refrigerant': Settings.get('Refrigerant', 'r407c'),
             'report_schedule': Settings.get('ReportSchedule', 'monthly'),
         }
@@ -117,11 +119,37 @@ def _load_settings(self) -> dict:
             'hup_min': 2, 'hup_max': 60,
             'vbo_min': 3, 'vbo_max': 140,
             'health_enabled': True,
-            'system_type': 'ground',  # Auto-detect from data
+            'system_type_override': 'auto',  # Auto-detect from calc[78]
             'refrigerant': 'r407c',
             'report_schedule': 'monthly',
         }
 ```
+
+## System Type Auto-Detection
+
+The heat pump type code at `calc[78]` (`ID_WEB_Code_WP_akt`) identifies the system. The naming convention encodes the source type:
+
+| Code prefix | Meaning | System type |
+|-------------|---------|-------------|
+| SW, SWC | Sole/Wasser (Brine/Water) | Ground source |
+| WW, WWC, WWB | Wasser/Wasser (Water/Water) | Ground source |
+| WZS, WZSD | WZSV series | Ground source |
+| WZW, WZWD | WZW series | Ground source |
+| MSW | MSW series | Ground source |
+| KSW | Kompakt Sole/Wasser | Ground source |
+| L1x, L2x | Luft (Air) single/dual | Air source |
+| LW, LWC | Luft/Wasser (Air/Water) | Air source |
+| KLW | Kompakt Luft/Wasser | Air source |
+| LD | Luft Direkt | Air source |
+| HMD | Air source variant | Air source |
+
+Suffixes: `407` = R407C refrigerant, `REV` = reversible (cooling capable), `S` = silent variant.
+
+**Detection logic:** Match code name prefix against known patterns. Default to ground source for unknown codes (safer — ground source scoring is less dependent on outdoor temp normalization).
+
+**Override:** User can override via `SystemTypeOverride` dropdown (default: "Auto-detect"). Override is stored in settings; auto-detect result is logged at startup for transparency.
+
+**Refrigerant:** Not reliably detectable from protocol (only some codes have the `407` suffix). User selects via dropdown. Default R407C.
 
 ## Data Collection
 
@@ -323,5 +351,8 @@ When upgrading from legacy to extended Domoticz:
 ## Notes
 
 - R407C refrigerant (1.25 kg charge) — default thresholds based on WZSV 92K3M baseline data
+- System type auto-detected from calc[78] (HeatpumpCode), with manual override available
+- Refrigerant selected by user (not reliably detectable from protocol)
 - Pump speed trending covers both HUP and VBO under Ground Loop category
 - Air source profile is designed but not implemented in v1 — ground source only initially
+- Controller is used across many brands (Alpha InnoTec, Novelan, Siemens, etc.) — auto-detection covers all
