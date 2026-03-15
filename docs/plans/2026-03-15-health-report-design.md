@@ -417,6 +417,45 @@ When upgrading from legacy to extended Domoticz:
 - Health monitor starts fresh with data accumulation
 - No migration code needed
 
+## Performance (Raspberry Pi safe)
+
+The health monitor is designed to be lightweight enough for low-powered devices like Raspberry Pi 3/4.
+
+### Per-heartbeat: `feed()` — ~50μs
+
+- ~20 floating point min/max comparisons
+- ~20 Welford online updates (3 multiplications + 2 additions each)
+- 3 superheat bin counter increments
+- 1 steady-state check (already computed by plugin, reused)
+
+For comparison: the TCP socket read to the heat pump takes 50-200ms. The stats work is 1000x cheaper.
+
+### Hourly: `save()` — ~5-10ms
+
+JSON serialize ~1300 numbers, write ~10KB file with atomic rename.
+
+### Monthly: `generate_report()` — ~0.5-2s
+
+HTML generation with inline CSS, score calculations across 13 months, string formatting. This is the heaviest operation but happens at most once per month (or on button press).
+
+### Memory: ~40-50KB resident
+
+- ~1300 numbers × 8 bytes = ~10KB (monthly buckets)
+- HTML template strings: ~20-30KB
+- Trivial on any Pi with 1+ GB RAM
+
+### Heartbeat Guard
+
+The `feed()` call should be skipped if the current heartbeat had a connection failure (no valid data to accumulate). This prevents recording garbage and avoids adding latency to an already-slow error recovery cycle.
+
+```python
+# In _update_all_devices, only feed if data was successfully read
+if 'READ_CALCUL' in data_store:
+    self.health_monitor.feed(data_store)
+```
+
+The hourly save and report generation happen at the end of the heartbeat, after all device updates. Even the worst case (2s report generation on a slow Pi) adds negligible time to a heartbeat that already takes 5-10s for TCP communication.
+
 ## Notes
 
 - R407C refrigerant (1.25 kg charge) — default thresholds based on WZSV 92K3M baseline data
