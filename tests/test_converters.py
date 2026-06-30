@@ -749,3 +749,57 @@ class TestLevelWithDividerConverter:
         # Level defaults to 0
         c = converters.LevelWithDividerConverter(divider=10)
         assert c.convert() == 0
+
+
+# =============================================================================
+# CompressionRatioConverter (Slice 2)
+# =============================================================================
+class TestCompressionRatioConverter:
+    def _advance(self, c, store):
+        required = math.ceil(ConfigLimits.SETTLING_SECONDS / context.heartbeat_interval)
+        for _ in range(required - 1):
+            c.convert(store, "READ_CALCUL", [180, 181])
+
+    def test_idle_gated(self):
+        result, reason = converters.CompressionRatioConverter().convert(
+            ds({231: 0, 237: 0}), "READ_CALCUL", [180, 181])
+        assert result is None and reason is not None
+
+    def test_steady_ratio_uses_absolute(self):
+        # HD 27.0 gauge, ND 5.0 gauge -> (27.0+1.013)/(5.0+1.013) = 4.66
+        c = converters.CompressionRatioConverter()
+        store = ds({231: 60, 237: 50, 180: 2700, 181: 500})
+        self._advance(c, store)
+        result, reason = c.convert(store, "READ_CALCUL", [180, 181])
+        assert reason is None
+        assert result == {"sValue": "4.66"}
+
+
+# =============================================================================
+# DischargeHeadroomConverter (Slice 2) -- steady-state gate, NO passive bypass
+# =============================================================================
+class TestDischargeHeadroomConverter:
+    def _advance(self, c, store):
+        required = math.ceil(ConfigLimits.SETTLING_SECONDS / context.heartbeat_interval)
+        for _ in range(required - 1):
+            c.convert(store, "READ_CALCUL", [252, 14], 10)
+
+    def test_idle_gated(self):
+        result, reason = converters.DischargeHeadroomConverter().convert(
+            ds({231: 0, 237: 0}), "READ_CALCUL", [252, 14], 10)
+        assert result is None and reason is not None
+
+    def test_steady_headroom(self):
+        # T-HG max 115.0 - hot gas 70.0 = 45.0 K
+        c = converters.DischargeHeadroomConverter()
+        store = ds({231: 60, 237: 50, 252: 1150, 14: 700})
+        self._advance(c, store)
+        result, reason = c.convert(store, "READ_CALCUL", [252, 14], 10)
+        assert reason is None
+        assert result == {"sValue": "45.0"}
+
+    def test_no_passive_cooling_bypass(self):
+        # Compressor off + passive-cooling flag set -> still gated (no bypass)
+        result, reason = converters.DischargeHeadroomConverter().convert(
+            ds({231: 0, 237: 0, 259: 1, 252: 1150, 14: 700}), "READ_CALCUL", [252, 14], 10)
+        assert result is None

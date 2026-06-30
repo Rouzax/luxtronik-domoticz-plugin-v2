@@ -641,6 +641,67 @@ class FreqHeadroomConverter(DataConverter):
             return (None, f"error: {type(e).__name__}")
 
 
+# Gauge -> absolute pressure offset. Calibrated 2026-06-30: the controller's computed
+# condensing temp calc[233] == t_sat(HD/100 + 1.013) across idle/load/shutdown, so HD/ND
+# (calc[180]/[181]) are gauge bar and atmospheric must be added for absolute-pressure math.
+ATMOSPHERIC_BAR = 1.013
+
+
+class CompressionRatioConverter(SteadyStateGateMixin, DataConverter):
+    """High/low pressure ratio on ABSOLUTE pressures (gauge readings + atmospheric).
+
+    HD/ND (calc[180]/[181]) are gauge bar; atmospheric is added before the ratio.
+    A rising ratio over time flags refrigerant-circuit degradation (fouling, charge
+    loss, restriction). Gated to steady-state compressor operation.
+    """
+
+    def convert(self, data_store: DataStore, command: str, indices: List[int], *args) -> GatedResult:
+        gate_reason = self.check_steady_state(data_store)
+        if gate_reason:
+            return (None, gate_reason)
+        try:
+            calc = data_store.get(command, [])
+            hp_addr, np_addr = indices
+            hd = float(calc[hp_addr]) / 100 + ATMOSPHERIC_BAR
+            nd = float(calc[np_addr]) / 100 + ATMOSPHERIC_BAR
+            if nd <= 0:
+                return (None, "ND<=0")
+            return ({'sValue': str(round(hd / nd, 2))}, None)
+        except (IndexError, TypeError, ZeroDivisionError) as e:
+            context.logger.log(
+                f"CompressionRatioConverter error: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE
+            )
+            return (None, f"error: {type(e).__name__}")
+
+
+class DischargeHeadroomConverter(SteadyStateGateMixin, DataConverter):
+    """Margin to the hot-gas trip = setpoint - hot gas (K).
+
+    indices = [setpoint_addr, sensor_addr]; both scaled by `divider`. The setpoint is the
+    controller's T-HG max trip (calc[252], ~115 C); the sensor is the hot gas (calc[14]).
+    Gated to steady-state ONLY -- unlike GatedTempDiffConverter this has no passive-cooling
+    bypass, because hot-gas headroom is meaningless when the compressor is off.
+    """
+
+    def convert(self, data_store: DataStore, command: str, indices: List[int], divider: float = 10) -> GatedResult:
+        gate_reason = self.check_steady_state(data_store)
+        if gate_reason:
+            return (None, gate_reason)
+        try:
+            calc = data_store.get(command, [])
+            setpoint_addr, sensor_addr = indices
+            a = float(calc[setpoint_addr]) / divider
+            b = float(calc[sensor_addr]) / divider
+            return ({'sValue': str(round(a - b, 1))}, None)
+        except (IndexError, TypeError, ZeroDivisionError) as e:
+            context.logger.log(
+                f"DischargeHeadroomConverter error: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE
+            )
+            return (None, f"error: {type(e).__name__}")
+
+
 # =============================================================================
 # Write Converters
 # =============================================================================
