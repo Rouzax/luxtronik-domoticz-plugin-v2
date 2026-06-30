@@ -63,22 +63,51 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
 
 ## Installation
 
-1. **Navigate to the Domoticz plugins directory**:
+Pick the method that suits you. Domoticz only needs the plugin's Python modules at runtime, so the first three options keep your `plugins/` folder clean; the full-repo clone also pulls developer files (tests, docs, the site page). After any method, restart Domoticz and enable the plugin (final step below).
+
+### Option 1: Release zip (recommended, no git)
+
+1. Download `luxtronikex-vX.Y.Z.zip` from the [Releases](https://github.com/Rouzax/luxtronik-domoticz-plugin-v2/releases) page.
+2. Extract it into your Domoticz plugins directory so the files land in `plugins/luxtronikex/`:
    ```sh
    cd /path/to/domoticz/plugins
+   unzip ~/Downloads/luxtronikex-vX.Y.Z.zip
    ```
 
-2. **Clone the repository**:
-   ```sh
-   git clone https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronik-domoticz-plugin-v2
-   ```
-   
-3. **Restart Domoticz**:
+The GitHub auto-generated "Source code" zip attached to each release is also runtime-only.
+
+### Option 2: Lean branch (git, with easy updates)
+
+Installs only the runtime files and lets you update later with `git pull`:
+```sh
+cd /path/to/domoticz/plugins
+git clone -b dist https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronikex
+```
+Update with:
+```sh
+git -C /path/to/domoticz/plugins/luxtronikex pull
+```
+
+### Option 3: Plugin manager
+
+If you use a Domoticz plugin manager (for example domoticz-plugins-manager or PyPluginStore), register this repository and point it at the **`dist`** branch so it installs the runtime-only files.
+
+### Option 4: Full repository (developers)
+
+Clones everything, including tests, docs, and the site page:
+```sh
+cd /path/to/domoticz/plugins
+git clone https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronik-domoticz-plugin-v2
+```
+
+### Final step: restart and enable
+
+1. **Restart Domoticz**:
    ```sh
    sudo systemctl restart domoticz.service
    ```
 
-4. **Enable the plugin**:
+2. **Enable the plugin**:
    - In Domoticz, navigate to **Setup** → **Hardware**
    - Add a new hardware device and select **Luxtronik Heat Pump Controller v2**
    - Enter the configuration details
