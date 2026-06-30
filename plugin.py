@@ -99,7 +99,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 
-import refrigerant
 from context import DebugLevel
 from translations import Language, DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
 from addresses import LuxtronikAddress, SocketCommand, ConfigLimits
@@ -112,7 +111,7 @@ from converters import (
     TempDiffConverter, GatedFloatConverter, GatedTempDiffConverter,
     TextStateConverter, COPCalculatorConverter, CapacityConverter,
     LastCycleConverter, CycleTracker,
-    RefrigerantDiffConverter, FreqHeadroomConverter,
+    FreqHeadroomConverter,
     CompressionRatioConverter, DischargeHeadroomConverter,
     WriteConverter, CommandToNumberConverter, LevelWithDividerConverter, AvailableWritesConverter,
 )
@@ -875,7 +874,6 @@ class DeviceFactory:
     _boolean_switch_converter = BooleanSwitchConverter()
     _capacity_converter = CapacityConverter()
     _last_cycle_converter = LastCycleConverter()
-    _refrigerant_diff_converter = RefrigerantDiffConverter()
     _freq_headroom_converter = FreqHeadroomConverter()
     _compression_ratio_converter = CompressionRatioConverter()
     _discharge_headroom_converter = DischargeHeadroomConverter()
@@ -1330,29 +1328,6 @@ class DeviceFactory:
         )
 
     @classmethod
-    def create_refrigerant_diff_device(cls, unit_id: int, spec_id: str, command: str,
-                                       hp_addr: int, ref_addr: int, used: int = 1) -> DeviceSpec:
-        """Create a refrigerant difference device (condensing sat. temp minus reference temp).
-
-        Uses RefrigerantDiffConverter: t_sat(hp_addr / 100) - ref_addr / 10.
-        Gated to steady-state compressor operation.
-        Unit is Kelvin (temperature difference).
-
-        Args:
-            hp_addr: High-pressure address (raw value divided by 100 to get bar)
-            ref_addr: Reference temperature address (raw value divided by 10 to get °C)
-        """
-        return DeviceSpec(
-            unit_id=unit_id,
-            spec_id=spec_id,
-            command=command,
-            address=[hp_addr, ref_addr],
-            read_converter=cls._refrigerant_diff_converter,
-            read_args=(100, 10),
-            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;K'}}
-        )
-
-    @classmethod
     def create_freq_headroom_device(cls, unit_id: int, spec_id: str, command: str,
                                     target_addr: int, actual_addr: int, used: int = 1) -> DeviceSpec:
         """Create a frequency headroom device (target minus actual compressor frequency).
@@ -1541,7 +1516,9 @@ class LuxtronikPlugin:
         Group 12: Refrigerant Circuit (160-179)
         ───────────────────────────────────────
           160-167 : Temperatures and pressures
-          168-179 : Reserved for future refrigerant
+          168-170 : Retired (legacy condensing/subcooling)
+          171-174 : Refrigerant metrics (lift, approach, discharge headroom, compression ratio)
+          175-179 : Reserved
         
         Group 13: Statistics & Counters (180-199)
         ─────────────────────────────────────────
@@ -2544,7 +2521,6 @@ class LuxtronikPlugin:
             context.logger = _logger
             context.translator = _translator
             context.heartbeat_interval = _heartbeat_interval
-            context.refrigerant = refrigerant.get("R407C")  # selector wiring is a later feature slice
 
             # Configure max COP limit
             self._configure_max_cop(Parameters.get('Mode1', '30'))

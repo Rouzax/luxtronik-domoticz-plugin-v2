@@ -1,8 +1,7 @@
 """Shared runtime state and the DebugLevel enum, for modules that must not import
-plugin.py or DomoticzEx. plugin.onStart() replaces logger/translator/heartbeat/refrigerant
+plugin.py or DomoticzEx. plugin.onStart() replaces logger/translator/heartbeat
 with the live objects; the defaults keep converters importable offline (tests inject stubs)."""
 from enum import IntFlag
-from refrigerant import get as _get_refrigerant
 from addresses import ConfigLimits
 
 
@@ -53,4 +52,3 @@ class _PassthroughTranslator:
 logger: _NullLogger = _NullLogger()
 translator: _PassthroughTranslator = _PassthroughTranslator()
 heartbeat_interval: int = ConfigLimits.HEARTBEAT_DEFAULT
-refrigerant = _get_refrigerant("R407C")

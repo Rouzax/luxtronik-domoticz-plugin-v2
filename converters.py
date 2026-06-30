@@ -576,42 +576,6 @@ class LastCycleConverter(DataConverter):
             return (None, f"error: {type(e).__name__}")
 
 
-class RefrigerantDiffConverter(SteadyStateGateMixin, DataConverter):
-    """Condensing saturation temperature minus a reference temperature.
-
-    Computes t_cond = t_sat(calc[hp_addr] / hp_divider) using the refrigerant's
-    P-T saturation curve, then returns t_cond - calc[ref_addr] / ref_divider.
-
-    Pressure-temperature curve note:
-    - Uses the saturated-liquid (bubble) line as the condensing reference.
-    - For R407C (zeotropic, ~5-6 K glide) this sits below the dew-point condensing
-      temperature. A dew-line table would be needed for true condensing temperature.
-    - The high-pressure gauge-vs-absolute basis from the controller is unverified;
-      use this converter only for basis-tolerant metrics (lift, condenser approach),
-      not for subcooling where absolute basis matters.
-
-    Gated to steady-state compressor operation (SteadyStateGateMixin).
-    """
-
-    def convert(self, data_store: DataStore, command: str, indices: List[int], hp_divider: float = 100, ref_divider: float = 10) -> GatedResult:
-        gate_reason = self.check_steady_state(data_store)
-        if gate_reason:
-            return (None, gate_reason)
-
-        try:
-            calc = data_store.get(command, [])
-            hp_addr, ref_addr = indices
-            t_cond = context.refrigerant.t_sat(float(calc[hp_addr]) / hp_divider)
-            ref = float(calc[ref_addr]) / ref_divider
-            return ({'sValue': str(round(t_cond - ref, 1))}, None)
-        except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(
-                f"RefrigerantDiffConverter error: {type(e).__name__}: {e}",
-                DebugLevel.VERBOSE
-            )
-            return (None, f"error: {type(e).__name__}")
-
-
 class FreqHeadroomConverter(DataConverter):
     """Target minus actual compressor frequency (Hz).
 

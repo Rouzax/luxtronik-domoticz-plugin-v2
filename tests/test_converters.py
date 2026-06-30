@@ -615,63 +615,6 @@ class TestSelectorSwitchConverter:
 
 
 # =============================================================================
-# RefrigerantDiffConverter
-# =============================================================================
-
-
-class TestRefrigerantDiffConverter:
-    """Characterization tests for RefrigerantDiffConverter.
-
-    PINNED values:
-    - context.refrigerant defaults to R407C.
-    - At HP raw 2481 / 100 = 24.81 bar, t_sat interpolates between table points
-      (22.1588, 50.0) and (24.8122, 55.0): t_sat = 50.0 + 5.0 * 2.6512/2.6534 = 54.9958.
-    - round(54.9958 - 10.0, 1) = 45.0 (lift test)
-    - round(54.9958 - 45.0, 1) = 10.0 (approach test)
-    """
-
-    def _advance_to_steady(self, c, store):
-        """Advance converter through required heartbeats to open the steady-state gate."""
-        required = math.ceil(ConfigLimits.SETTLING_SECONDS / context.heartbeat_interval)
-        for _ in range(required):
-            c.convert(store, "READ_CALCUL", [180, 10], 100, 10)
-
-    def test_idle_returns_none_with_reason(self):
-        """Idle compressor gates the converter; reason contains 'idle'."""
-        result, reason = converters.RefrigerantDiffConverter().convert(
-            ds({231: 0, 237: 0}), "READ_CALCUL", [180, 10], 100, 10
-        )
-        assert result is None
-        assert "idle" in reason
-
-    def test_lift_after_settling(self):
-        """HP 2481/100=24.81 bar -> t_sat~54.996 C; ref 100/10=10.0 C; diff rounds to '45.0'."""
-        c = converters.RefrigerantDiffConverter()
-        store = ds({231: 60, 237: 50, 180: 2481, 10: 100})
-        self._advance_to_steady(c, store)
-        result, reason = c.convert(store, "READ_CALCUL", [180, 10], 100, 10)
-        assert result == {"sValue": "45.0"}
-        assert reason is None
-
-    def test_approach_after_settling(self):
-        """HP 2481/100=24.81 bar -> t_sat~54.996 C; ref 450/10=45.0 C; diff rounds to '10.0'."""
-        c = converters.RefrigerantDiffConverter()
-        store = ds({231: 60, 237: 50, 180: 2481, 10: 450})
-        self._advance_to_steady(c, store)
-        result, reason = c.convert(store, "READ_CALCUL", [180, 10], 100, 10)
-        assert result == {"sValue": "10.0"}
-        assert reason is None
-
-    def test_tuple_contract(self):
-        """Every return is a 2-tuple (result_or_None, reason_or_None)."""
-        result, reason = converters.RefrigerantDiffConverter().convert(
-            ds({231: 0, 237: 0}), "READ_CALCUL", [180, 10], 100, 10
-        )
-        assert isinstance(result, (dict, type(None)))
-        assert isinstance(reason, (str, type(None)))
-
-
-# =============================================================================
 # FreqHeadroomConverter
 # =============================================================================
 
