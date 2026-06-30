@@ -65,7 +65,7 @@ jobs:
           fi
           git rm -rfq . >/dev/null 2>&1 || true
           cp "$snapshot"/* .
-          git add -A
+          git add -- plugin.py translations.py addresses.py context.py converters.py README.md
           if git diff --cached --quiet; then
             echo "dist already up to date for $TAG"
             exit 0
