@@ -1,6 +1,7 @@
 # Claude Code
 CLAUDE.md
 TODO.md
+.claude/
 
 # Claude-generated design specs / implementation plans (local-only)
 docs/plans/
