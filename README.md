@@ -97,7 +97,7 @@ If you use a Domoticz plugin manager (for example domoticz-plugins-manager or Py
 Clones everything, including tests, docs, and the site page:
 ```sh
 cd /path/to/domoticz/plugins
-git clone https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronik-domoticz-plugin-v2
+git clone https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronikex
 ```
 
 ### Final step: restart and enable
@@ -113,6 +113,15 @@ git clone https://github.com/Rouzax/luxtronik-domoticz-plugin-v2.git luxtronik-d
    - Enter the configuration details
    - Click **Add**
   
+### Upgrading / migrating
+
+Your devices and history are tied to the hardware instance (the DeviceID is `luxtronikex_hw<HardwareID>`), not to the plugin folder, so you can change folders or switch install method without losing anything, as long as you keep the same hardware entry in Domoticz.
+
+One rule: keep exactly **one** copy of the plugin. Domoticz scans every `plugins/*/plugin.py`, so two folders that both contain this plugin would register it twice. When migrating, **replace** the old folder, do not add a second one.
+
+- **From the full clone to the lean branch:** delete the old plugin folder, then reinstall with Option 1 or 2 (into `plugins/luxtronikex/`) and restart Domoticz. Your hardware and devices return unchanged. (In-place alternative: `cd <old folder> && git fetch origin dist && git checkout dist`; this works, but `dist` is an orphan branch so the on-disk `.git` keeps the old history, a fresh clone is leaner.)
+- **Plugin-manager installs:** an existing manager install stays on the branch it was cloned from; uninstall and reinstall it through the manager to switch to the lean branch. New manager installs use `dist` automatically.
+
 ## Screenshots
 
 <details>
