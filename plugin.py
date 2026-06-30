@@ -93,20 +93,19 @@ Author: Rouzax, 2025 (Refactored)
 """
 
 import DomoticzEx as Domoticz
-import math
 import socket
 import struct
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 
 import refrigerant
 from context import DebugLevel
 from translations import Language, DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
 from addresses import LuxtronikAddress, SocketCommand, ConfigLimits
 from converters import (
-    DataStore, ConvertResult, GatedResult,
-    DataConverter, SteadyStateGateMixin,
+    DataStore,
+    DataConverter,
     FloatConverter, NumberConverter, SelectorSwitchConverter,
     InstantPowerConverter, InstantPowerSplitConverter,
     RuntimeHoursConverter, IntegerValueConverter, BooleanSwitchConverter,

@@ -3,6 +3,7 @@ plugin.py or DomoticzEx. plugin.onStart() replaces logger/translator/heartbeat/r
 with the live objects; the defaults keep converters importable offline (tests inject stubs)."""
 from enum import IntFlag
 from refrigerant import get as _get_refrigerant
+from addresses import ConfigLimits
 
 
 # =============================================================================
@@ -51,5 +52,5 @@ class _PassthroughTranslator:
 # Module-level state: replaced by plugin.onStart() with live objects.
 logger: _NullLogger = _NullLogger()
 translator: _PassthroughTranslator = _PassthroughTranslator()
-heartbeat_interval: int = 30
+heartbeat_interval: int = ConfigLimits.HEARTBEAT_DEFAULT
 refrigerant = _get_refrigerant("R407C")

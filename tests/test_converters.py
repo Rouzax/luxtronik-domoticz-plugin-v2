@@ -12,7 +12,7 @@ import pytest
 
 import context
 import converters
-from addresses import ConfigLimits, LuxtronikAddress
+from addresses import ConfigLimits
 
 
 # =============================================================================
@@ -35,19 +35,6 @@ def ds(calc):
         arr[i] = v
     return {"READ_CALCUL": arr}
 
-
-def _advance_to_steady(converter_with_mixin, data_store):
-    """Drive a gated converter through enough heartbeats for the gate to open.
-
-    With heartbeat_interval=20 and SETTLING_SECONDS=120, required = ceil(120/20) = 6.
-    Calls converter.check_steady_state() directly (mixin method).
-    Returns the final gate reason (None means gate is now open).
-    """
-    required = math.ceil(ConfigLimits.SETTLING_SECONDS / context.heartbeat_interval)
-    reason = "not yet started"
-    for _ in range(required):
-        reason = converter_with_mixin.check_steady_state(data_store)
-    return reason
 
 
 # =============================================================================
