@@ -99,7 +99,6 @@ import struct
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Callable, Any, Tuple
-from abc import ABC, abstractmethod
 
 import refrigerant
 from context import DebugLevel
@@ -111,10 +110,10 @@ from converters import (
     FloatConverter, NumberConverter, SelectorSwitchConverter,
     InstantPowerConverter, InstantPowerSplitConverter,
     RuntimeHoursConverter, IntegerValueConverter, BooleanSwitchConverter,
-    translate,
     TempDiffConverter, GatedFloatConverter, GatedTempDiffConverter,
     TextStateConverter, COPCalculatorConverter, CapacityConverter,
     LastCycleConverter, CycleTracker,
+    WriteConverter, CommandToNumberConverter, LevelWithDividerConverter, AvailableWritesConverter,
 )
 
 
@@ -363,56 +362,6 @@ class TranslationManager:
 
 # Global translation manager
 _translator = TranslationManager()
-
-
-# =============================================================================
-# Write Converters
-# =============================================================================
-class WriteConverter(ABC):
-    """Abstract base class for write converters."""
-    
-    @abstractmethod
-    def convert(self, **kwargs) -> int:
-        """Convert command to value for writing."""
-        pass
-
-
-class CommandToNumberConverter(WriteConverter):
-    """Converts On/Off command to number."""
-    
-    def convert(self, Command: str = '', **kwargs) -> int:
-        return 1 if Command == 'On' else 0
-
-
-class LevelWithDividerConverter(WriteConverter):
-    """Returns level divided by divider."""
-    
-    def __init__(self, divider: float):
-        self.divider = divider
-    
-    def convert(self, Level: int = 0, **kwargs) -> int:
-        return int(Level / self.divider)
-
-
-class AvailableWritesConverter(WriteConverter):
-    """Returns value from available writes based on level."""
-    
-    def __init__(self, divider: float, writes_idx: int):
-        self.divider = divider
-        self.writes_idx = writes_idx
-    
-    def convert(self, available_writes: Dict, Level: int = 0, **kwargs) -> int:
-        try:
-            values = available_writes[self.writes_idx].get_val()
-            index = int(Level / self.divider)
-            if 0 <= index < len(values):
-                return values[index]
-            else:
-                _logger.error(f"Level {Level} (index {index}) out of range for writes_idx {self.writes_idx}")
-                return values[0] if values else 0
-        except (KeyError, IndexError, TypeError) as e:
-            _logger.error(f"AvailableWritesConverter error", exc=e)
-            return 0
 
 
 # =============================================================================
