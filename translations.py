@@ -1059,6 +1059,22 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.FRENCH: 'Température de saturation de condensation moins température eau de départ.\nIndique l\'efficacité de transfert de chaleur au condenseur.\nValeurs plus basses indiquent de meilleures performances.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
             },
     },
+    'condensing_supply_delta': {
+            'name': {
+                Language.ENGLISH: 'Condensing-supply ΔT',
+                Language.POLISH: 'ΔT skraplanie-zasilanie',
+                Language.DUTCH: 'Condensatie-aanvoer ΔT',
+                Language.GERMAN: 'Kondensation-Vorlauf ΔT',
+                Language.FRENCH: 'ΔT condensation-départ',
+            },
+            'description': {
+                Language.ENGLISH: 'Condensing (saturation) temperature minus the condenser leaving-water (supply) temperature.\nPositive: water below condensing (condenser headroom; a rising trend in low-temperature heating hints at fouling or low flow).\nNegative: desuperheat-dominated, e.g. DHW or high water temps, where hot discharge gas heats the water above the condensing temperature.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.POLISH: 'Temperatura nasycenia skraplania minus temperatura wody zasilającej (wylot skraplacza).\nDodatnia: woda poniżej skraplania (zapas skraplacza; rosnący trend przy niskotemperaturowym ogrzewaniu sugeruje zanieczyszczenie lub niski przepływ).\nUjemna: dominacja przegrzania, np. CWU lub wysokie temperatury wody.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
+                Language.DUTCH: 'Condensatie(verzadigings)temperatuur minus de aanvoerwatertemperatuur (condensoruitgang).\nPositief: water onder condensatie (condensormarge; een stijgende trend bij laagtemperatuurverwarming wijst op vervuiling of lage flow).\nNegatief: oververhitting-gedomineerd, bijv. tapwater of hoge watertemperaturen, waar heetgas het water boven de condensatietemperatuur verwarmt.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Kondensations(sättigungs)temperatur minus Vorlaufwassertemperatur (Kondensatorausgang).\nPositiv: Wasser unter Kondensation (Kondensatorreserve; ein steigender Trend bei Niedertemperaturheizung deutet auf Verschmutzung oder geringen Durchfluss).\nNegativ: enthitzungsdominiert, z. B. Warmwasser oder hohe Wassertemperaturen.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Température de saturation de condensation moins la température de l\'eau de départ (sortie condenseur).\nPositif : eau sous la condensation (réserve condenseur ; une tendance à la hausse en chauffage basse température suggère encrassement ou faible débit).\nNégatif : dominé par la désurchauffe, p. ex. ECS ou eau chaude.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
+            },
+    },
     'discharge_headroom': {
             'name': {
                 Language.ENGLISH: 'Discharge headroom',

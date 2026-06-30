@@ -315,7 +315,7 @@ Refrigerant temperatures, pressures, and derived diagnostics.
 | 166 | Pressure high | High-side pressure (bar), **gated** |
 | 167 | Pressure low | Low-side pressure (bar), **gated** |
 | 171 | Refrigerant lift | Condensing temp minus evaporating temp (K); primary COP driver, **gated** |
-| 172 | Condenser approach | Condensing temp minus supply water temp (K); condenser fouling/flow indicator, **gated** *(may read negative during DHW)* |
+| 172 | Condensing-supply ΔT | Condensing temp minus condenser leaving-water (supply) temp (K), **signed**: positive = condenser headroom (low-temp heating; rising trend hints at fouling/low flow), negative = desuperheat-dominated (DHW/high water temps), **gated** |
 | 173 | Discharge headroom | Margin to hot-gas trip: T-HG max setpoint minus hot gas temp (K); compressor health/margin-to-cutoff, **gated** |
 | 174 | Compression ratio | High/low pressure ratio on absolute pressures; a rising trend flags refrigerant-circuit degradation, **gated** |
 
@@ -457,7 +457,7 @@ sudo systemctl start domoticz
   - Unit 164 renamed to "Condensing temperature" (controller's computed condensing/saturation temperature, calc 233)
   - Units 168 (Condensing temp), 169 (Subcooling), and 170 (Condensing pressure) retired: these addresses carried configuration setpoints and a firmware version, not live sensor values; subcooling is not measurable on this controller
   - New Unit 171 "Refrigerant lift" (K): condensing temp minus evaporating temp; the primary COP driver, gated
-  - New Unit 172 "Condenser approach" (K): condensing temp minus supply water temp; condenser fouling/flow indicator, gated (may read negative during DHW)
+  - New Unit 172 "Condensing-supply ΔT" (K): signed condensing temp minus condenser leaving-water temp; positive = condenser headroom in low-temp heating, negative = desuperheat-dominated at high water temps (DHW), gated
   - New Unit 173 "Discharge headroom" (K): margin to the hot-gas trip setpoint; compressor health/margin-to-cutoff, gated
   - New Unit 174 "Compression ratio": high/low pressure ratio on absolute pressures; a rising trend flags refrigerant-circuit degradation, gated
 - Plugin split into multiple modules: plugin.py, translations.py, addresses.py, context.py, converters.py

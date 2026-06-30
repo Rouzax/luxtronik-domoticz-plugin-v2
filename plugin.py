@@ -215,6 +215,7 @@ class TranslationManager:
     _RENAMED_SPECS = {
         'condensing_temp': 'liquid_line_temp',        # 164: calc[233] is condensing temp (was mislabeled liquid line)
         'compressor_heating_temp': 'discharge_temp',  # 162: calc[177] is compressor heating, not discharge
+        'condensing_supply_delta': 'condenser_approach',  # 172: signed ΔT, not an always-positive "approach"
     }
 
     LANGUAGE_MAP = {
@@ -1960,11 +1961,15 @@ class LuxtronikPlugin:
                 [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.EVAPORATING_TEMP],
                 divider=10, gated=True),
 
-            # Unit 172: Condenser approach (condensing temp - heat supply temp)
-            # Uses calc[233] condensing temp directly (no P-T curve conversion).
-            # Gated: only meaningful during steady-state compressor operation
+            # Unit 172: Condensing-supply ΔT (condensing temp - heat supply water temp).
+            # Signed: positive = water below condensing (condenser headroom, normal in
+            # low-temp heating); negative = desuperheat-dominated (high water temps / DHW,
+            # where the discharge gas heats the leaving water above the condensing temp).
+            # TVL (calc[10]) is the condenser-outlet water, before the 3-way valve, so this
+            # is the same physical reference in heating and DHW. Uses calc[233] directly.
+            # Gated: only meaningful during steady-state compressor operation.
             DeviceFactory.create_temp_diff_device(
-                172, 'condenser_approach', 'READ_CALCUL',
+                172, 'condensing_supply_delta', 'READ_CALCUL',
                 [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.HEAT_SUPPLY_TEMP],
                 divider=10, gated=True),
 
