@@ -1,5 +1,12 @@
 # Claude Code
 CLAUDE.md
+TODO.md
+
+# Claude-generated design specs / implementation plans (local-only)
+docs/plans/
+
+# Local-only scratch + read-only debug toolkit (never committed)
+_temp/
 
 # Python
 __pycache__/
@@ -7,3 +14,4 @@ __pycache__/
 
 # Worktrees
 .worktrees/
+.superpowers/
