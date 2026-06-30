@@ -43,6 +43,9 @@ Also published on the [Domoticz Forum](https://forum.domoticz.com/viewtopic.php?
   - German
   - French
 
+- **Refrigerant Circuit Diagnostics:**  
+  Gated diagnostic devices for deep refrigerant-side insight: condensing temperature, refrigerant lift (condensing minus evaporating, the primary COP driver), condenser approach (fouling/flow indicator), discharge headroom (margin to hot-gas cutoff), and compression ratio (flags circuit degradation when trending up).
+
 - **Granular Debug Logging:**  
   Multiple debug levels for efficient troubleshooting:
   - **None:** Errors only
@@ -130,7 +133,7 @@ The controller's power reading only measures compressor power. Enable **Pump Pow
 
 ## Created Devices
 
-The plugin creates 66 devices organized into 14 logical groups. Devices marked with `Used=0` are created but set to unused by default—enable them in Domoticz if needed.
+The plugin creates 68 devices organized into 14 logical groups. Devices marked with `Used=0` are created but set to unused by default; enable them in Domoticz if needed.
 
 ### Device Groups Overview
 
@@ -146,8 +149,8 @@ The plugin creates 66 devices organized into 14 logical groups. Devices marked w
 | 8 | 90-93 | Environment | 4 |
 | 9 | 100-106 | Source Circuit | 7 |
 | 10 | 120-131 | Mixing Circuits | 4 |
-| 11 | 140-144 | Compressor | 5 |
-| 12 | 160-170 | Refrigerant Circuit | 11 |
+| 11 | 140-145 | Compressor | 6 |
+| 12 | 160-174 | Refrigerant Circuit | 12 |
 | 13 | 180-185 | Statistics & Counters | 6 |
 | 14 | 200-202 | Diagnostics | 3 |
 
@@ -282,7 +285,7 @@ Optional mixing valve circuits for zone control.
 
 ---
 
-### Group 11: Compressor (Units 140-144)
+### Group 11: Compressor (Units 140-145)
 
 Compressor operational metrics.
 
@@ -293,26 +296,28 @@ Compressor operational metrics.
 | 142 | Compressor min freq | Minimum allowed frequency *(unused by default)* |
 | 143 | Compressor max freq | Maximum allowed frequency *(unused by default)* |
 | 144 | Compressor capacity | Load relative to maximum (%), **gated** |
+| 145 | Freq headroom | Target frequency minus actual (Hz); modulation headroom remaining; updates while compressor runs |
 
 ---
 
-### Group 12: Refrigerant Circuit (Units 160-167)
+### Group 12: Refrigerant Circuit (Units 160-174)
 
-Refrigerant temperatures and pressures.
+Refrigerant temperatures, pressures, and derived diagnostics.
 
 | Unit | Device | Description |
 |------|--------|-------------|
 | 160 | Hot gas temp | Compressor discharge temperature |
 | 161 | Suction temp | Compressor inlet temperature |
-| 162 | Discharge temp | Discharge line temperature |
+| 162 | Compressor heating temp | LIN inverter/compressor-body heating sensor (calc 177) |
 | 163 | Evaporating temp | Refrigerant evaporation point |
-| 164 | Liquid line temp | Liquid line temperature before EEV |
+| 164 | Condensing temperature | Controller's computed condensing (saturation) temperature (calc 233) |
 | 165 | Superheat | Refrigerant superheat (K), **gated** |
 | 166 | Pressure high | High-side pressure (bar), **gated** |
 | 167 | Pressure low | Low-side pressure (bar), **gated** |
-| 168 | Condensing temp | Condensing temperature from firmware, **gated** *(unused by default)* |
-| 169 | Subcooling | Condensing temp − liquid line temp (K), **gated** *(unused by default)* |
-| 170 | Condensing pressure | Condensing pressure from firmware (bar), **gated** *(unused by default)* |
+| 171 | Refrigerant lift | Condensing temp minus evaporating temp (K); primary COP driver, **gated** |
+| 172 | Condenser approach | Condensing temp minus supply water temp (K); condenser fouling/flow indicator, **gated** *(may read negative during DHW)* |
+| 173 | Discharge headroom | Margin to hot-gas trip: T-HG max setpoint minus hot gas temp (K); compressor health/margin-to-cutoff, **gated** |
+| 174 | Compression ratio | High/low pressure ratio on absolute pressures; a rising trend flags refrigerant-circuit degradation, **gated** |
 
 ---
 
@@ -350,7 +355,7 @@ Devices marked **gated** only update during steady-state compressor operation (w
 ### Reserved Unit Ranges
 
 Each group has reserved unit numbers for future expansion:
-- Units 2-9, 17-29, 33-39, 43-49, 53-59, 68-79, 81-89, 94-99, 107-119, 122-129, 132-139, 145-159, 171-179, 186-199, 203-209
+- Units 2-9, 17-29, 33-39, 43-49, 53-59, 68-79, 81-89, 94-99, 107-119, 122-129, 132-139, 146-159, 175-179, 186-199, 203-209
 
 ## Debugging
 
@@ -425,6 +430,9 @@ sudo systemctl start domoticz
 |------|---------|
 | `plugin.py` | Main plugin code with DomoticzEx framework integration |
 | `translations.py` | Multi-language translations for device names and descriptions |
+| `addresses.py` | Luxtronik protocol address constants |
+| `context.py` | Shared plugin context and state |
+| `converters.py` | Data converter classes (DataConverter hierarchy) |
 | `README.md` | This documentation file |
 | `migration/` | Migration tools for upgrading from legacy plugin |
 | `migration/README.md` | Migration instructions |
@@ -441,6 +449,18 @@ sudo systemctl start domoticz
 - Translations use `spec_id` as the lookup key
 
 ## Changelog
+
+### Version 2.1.0
+- New compressor device: Unit 145 "Freq headroom" (target frequency minus actual Hz), shows remaining modulation headroom while the compressor runs
+- Refrigerant circuit corrections and new diagnostic devices:
+  - Unit 162 renamed to "Compressor heating temp" (LIN inverter/compressor-body heating sensor, calc 177)
+  - Unit 164 renamed to "Condensing temperature" (controller's computed condensing/saturation temperature, calc 233)
+  - Units 168 (Condensing temp), 169 (Subcooling), and 170 (Condensing pressure) retired: these addresses carried configuration setpoints and a firmware version, not live sensor values; subcooling is not measurable on this controller
+  - New Unit 171 "Refrigerant lift" (K): condensing temp minus evaporating temp; the primary COP driver, gated
+  - New Unit 172 "Condenser approach" (K): condensing temp minus supply water temp; condenser fouling/flow indicator, gated (may read negative during DHW)
+  - New Unit 173 "Discharge headroom" (K): margin to the hot-gas trip setpoint; compressor health/margin-to-cutoff, gated
+  - New Unit 174 "Compression ratio": high/low pressure ratio on absolute pressures; a rising trend flags refrigerant-circuit degradation, gated
+- Plugin split into multiple modules: plugin.py, translations.py, addresses.py, context.py, converters.py
 
 ### Version 2.0.3
 - Pump power compensation: estimates HUP/VBO circulation pump power from speed percentages and adds it to the compressor power reading for more accurate system COP
