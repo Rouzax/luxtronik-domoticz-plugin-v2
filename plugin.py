@@ -99,33 +99,12 @@ import struct
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Callable, Any, Tuple
-from enum import IntFlag, auto
 from abc import ABC, abstractmethod
 
+import refrigerant
+from context import DebugLevel
 from translations import Language, DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
 from addresses import LuxtronikAddress, SocketCommand, ConfigLimits
-
-
-# =============================================================================
-# Debug Level Constants (using IntFlag for bitwise operations)
-# =============================================================================
-class DebugLevel(IntFlag):
-    """Debug level flags for controlling log output.
-    
-    Levels:
-        NONE (0):    Errors only (always logged)
-        BASIC (1):   Lifecycle, summaries, write confirmations → Status()
-        DEVICE (2):  Device updates (changes only) → Debug()
-        COMMS (4):   Connections, protocol, commands → Debug()
-        VERBOSE (8): Tracker details, data conversion → Debug()
-        ALL (-1):    Everything
-    """
-    NONE = 0
-    BASIC = 1       # Lifecycle, summaries, write confirmations
-    DEVICE = 2      # Device updates (changes only)
-    COMMS = 4       # Connections, protocol, commands
-    VERBOSE = 8     # Tracker details, data conversion
-    ALL = -1        # All debugging enabled
 
 
 # =============================================================================
@@ -3037,7 +3016,15 @@ class LuxtronikPlugin:
             Domoticz.Heartbeat(heartbeat)
             _heartbeat_interval = heartbeat
             _logger.log(f"Heartbeat set to {heartbeat}s", DebugLevel.BASIC)
-            
+
+            # Bridge live objects into context so extracted modules can access them
+            # without importing plugin.py or DomoticzEx.
+            import context
+            context.logger = _logger
+            context.translator = _translator
+            context.heartbeat_interval = _heartbeat_interval
+            context.refrigerant = refrigerant.get("R407C")  # selector wiring is a later feature slice
+
             # Configure max COP limit
             self._configure_max_cop(Parameters.get('Mode1', '30'))
             self._configure_pump_compensation(
