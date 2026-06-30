@@ -488,6 +488,9 @@ sudo systemctl start domoticz
 
 ## Changelog
 
+### Version 2.1.1
+- Added `externallink` to the plugin definition (links to the GitHub repository from the Domoticz hardware page, and lets plugin managers reliably match the installed plugin to its repository)
+
 ### Version 2.1.0
 - New compressor device: Unit 145 "Freq headroom" (target frequency minus actual Hz), shows remaining modulation headroom while the compressor runs
 - Refrigerant circuit corrections and new diagnostic devices:
