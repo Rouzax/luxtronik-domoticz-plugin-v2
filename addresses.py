@@ -82,6 +82,7 @@ class LuxtronikAddress:
     HEATING_SPREAD_TARGET = 242    # HUP_Temp_Spread_Soll
     HEATING_SPREAD_ACTUAL = 243    # HUP_Temp_Spread_Ist
     CONDENSING_PRESSURE = 252       # Condensing pressure (bar/100) - from firmware
+    HOT_GAS_MAX_SETPOINT = 252      # T-HG max: hot-gas trip setpoint (~115 C on this unit); same address as CONDENSING_PRESSURE
     HEAT_OUTPUT = 257
     CONDENSING_TEMP = 258           # Condensing temperature (°C/10) - from firmware
     PASSIVE_COOLING_FLAG = 259

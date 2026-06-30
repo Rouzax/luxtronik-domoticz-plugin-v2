@@ -838,6 +838,22 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.FRENCH: 'Utilisation de la capacité du compresseur.\nAffiche charge actuelle vs maximum.\n>80% soutenu peut indiquer sous-dimensionnement.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
             },
         },
+    'freq_headroom': {
+            'name': {
+                Language.ENGLISH: 'Freq headroom',
+                Language.POLISH: 'Rezerwa częstotl.',
+                Language.DUTCH: 'Freq. marge',
+                Language.GERMAN: 'Frequenzreserve',
+                Language.FRENCH: 'Marge fréquence',
+            },
+            'description': {
+                Language.ENGLISH: 'Target minus actual compressor frequency.\nPositive: compressor below target; negative: above target.\nUseful for diagnosing controller tracking.\n\n⚡ GATED: Only reports while the compressor is running.',
+                Language.POLISH: 'Docelowa minus rzeczywista częstotliwość sprężarki.\nDodatnia: sprężarka poniżej celu; ujemna: powyżej.\nPomaga diagnozować śledzenie przez sterownik.\n\n⚡ BRAMKOWANY: Aktualizuje tylko gdy sprężarka pracuje.',
+                Language.DUTCH: 'Doelfrequentie minus actuele compressorfrequentie.\nPositief: compressor onder doel; negatief: boven doel.\nNuttig voor diagnose regeling.\n\n⚡ GATED: Alleen updates als de compressor draait.',
+                Language.GERMAN: 'Soll-Frequenz minus Ist-Frequenz des Verdichters.\nPositiv: unter Sollwert; negativ: über Sollwert.\nNützlich zur Diagnose des Regelverhaltens.\n\n⚡ GATED: Aktualisiert nur wenn Verdichter läuft.',
+                Language.FRENCH: 'Fréquence cible moins fréquence réelle du compresseur.\nPositif: en dessous de la cible; négatif: au-dessus.\nUtile pour diagnostiquer le suivi du régulateur.\n\n⚡ GATED: Mises à jour uniquement quand le compresseur fonctionne.',
+            },
+        },
 
     # =========================================================================
     # GROUP 12: REFRIGERANT CIRCUIT (Units 160-167)
@@ -1005,6 +1021,54 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
             },
             'description': {
                 Language.ENGLISH: 'Condensing pressure from firmware calculation.\nCompanion to high pressure (LIN bus transducer).\n\n⚡ GATED: Only updates during steady-state operation.\nEquilibrates to ambient when idle.',
+            },
+    },
+    'refrigerant_lift': {
+            'name': {
+                Language.ENGLISH: 'Refrigerant lift',
+                Language.POLISH: 'Wznios czynnika',
+                Language.DUTCH: 'Koudemiddellift',
+                Language.GERMAN: 'Kältemittelhub',
+                Language.FRENCH: 'Levée réfrigérant',
+            },
+            'description': {
+                Language.ENGLISH: 'Condensing saturation temperature minus evaporating temperature.\nRepresents the thermodynamic lift the compressor must overcome.\nHigher lift increases compressor work and reduces efficiency.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.POLISH: 'Temperatura nasycenia skraplania minus temperatura parowania.\nOkreśla skok termodynamiczny pokonywany przez sprężarkę.\nWyższy skok zwiększa pracę sprężarki i obniża sprawność.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
+                Language.DUTCH: 'Condensatieverzadigingstemperatuur minus verdampingstemperatuur.\nGeeft de thermodynamische lift weer die de compressor moet overwinnen.\nHogere lift verhoogt compressorarbeid en verlaagt rendement.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Kondensationssättigungstemperatur minus Verdampfungstemperatur.\nStellt den thermodynamischen Hub dar, den der Verdichter überwinden muss.\nHöherer Hub erhöht die Verdichterarbeit und senkt den Wirkungsgrad.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Température de saturation de condensation moins température d\'évaporation.\nReprésente la levée thermodynamique que le compresseur doit surmonter.\nUne levée plus élevée augmente le travail et réduit le rendement.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
+            },
+    },
+    'condenser_approach': {
+            'name': {
+                Language.ENGLISH: 'Condenser approach',
+                Language.POLISH: 'Różnica skraplacz',
+                Language.DUTCH: 'Condensor aanloop',
+                Language.GERMAN: 'Kondensatorspread',
+                Language.FRENCH: 'Approche condenseur',
+            },
+            'description': {
+                Language.ENGLISH: 'Condensing saturation temperature minus heat supply water temperature.\nIndicates heat transfer effectiveness at the condenser.\nLower values mean better condenser performance.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.POLISH: 'Temperatura nasycenia skraplania minus temperatura wody zasilającej.\nWskazuje skuteczność wymiany ciepła w skraplaczu.\nNiższe wartości oznaczają lepszą pracę skraplacza.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
+                Language.DUTCH: 'Condensatieverzadigingstemperatuur minus aanvoertemperatuur.\nGeeft de warmteoverdrachtseffectiviteit van de condensor aan.\nLagere waarden betekenen betere condensorprestaties.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Kondensationssättigungstemperatur minus Heizungsvorlauftemperatur.\nZeigt die Wärmeübertragungseffizienz am Kondensator.\nNiedrigere Werte bedeuten bessere Kondensatorleistung.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Température de saturation de condensation moins température eau de départ.\nIndique l\'efficacité de transfert de chaleur au condenseur.\nValeurs plus basses indiquent de meilleures performances.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
+            },
+    },
+    'discharge_headroom': {
+            'name': {
+                Language.ENGLISH: 'Discharge headroom',
+                Language.POLISH: 'Margines T-HG',
+                Language.DUTCH: 'Persgas marge',
+                Language.GERMAN: 'Heißgas-Reserve',
+                Language.FRENCH: 'Marge refoulement',
+            },
+            'description': {
+                Language.ENGLISH: 'Margin remaining to the hot-gas trip setpoint (T-HG max, ~115 C).\nComputed as setpoint minus actual hot gas temperature.\nDecreasing margin indicates high refrigerant stress or low charge.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.POLISH: 'Pozostały margines do limitu ochrony gazu gorącego (T-HG max, ~115 C).\nObliczany jako wartość zadana minus rzeczywista temperatura gazu.\nMalejący margines sygnalizuje stres czynnika lub niski poziom napełnienia.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
+                Language.DUTCH: 'Resterende marge tot de heetgas-beveiligingsgrens (T-HG max, ~115 C).\nBerekend als instelwaarde minus actuele heetgastemperatuur.\nAfnemende marge wijst op hoge druk op koudemiddel of laag niveau.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Verbleibende Reserve bis zur Heißgas-Schutzgrenze (T-HG max, ~115 C).\nBerechnet als Sollwert minus Ist-Heißgastemperatur.\nAbnehmende Reserve deutet auf hohe Kältemittelbelastung hin.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Marge restante jusqu\'au seuil de protection du gaz de refoulement (T-HG max, ~115 C).\nCalculée comme valeur de consigne moins température réelle.\nUne marge décroissante indique stress réfrigérant ou charge insuffisante.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
             },
     },
     'cooling_release_timer': {

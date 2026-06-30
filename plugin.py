@@ -112,6 +112,7 @@ from converters import (
     TempDiffConverter, GatedFloatConverter, GatedTempDiffConverter,
     TextStateConverter, COPCalculatorConverter, CapacityConverter,
     LastCycleConverter, CycleTracker,
+    RefrigerantDiffConverter, FreqHeadroomConverter,
     WriteConverter, CommandToNumberConverter, LevelWithDividerConverter, AvailableWritesConverter,
 )
 
@@ -872,6 +873,8 @@ class DeviceFactory:
     _boolean_switch_converter = BooleanSwitchConverter()
     _capacity_converter = CapacityConverter()
     _last_cycle_converter = LastCycleConverter()
+    _refrigerant_diff_converter = RefrigerantDiffConverter()
+    _freq_headroom_converter = FreqHeadroomConverter()
     
     @classmethod
     def create_temperature_device(cls, unit_id: int, spec_id: str, command: str, 
@@ -1320,6 +1323,52 @@ class DeviceFactory:
             read_args=(),
             device_params=params
             # No write_converter - this is read-only
+        )
+
+    @classmethod
+    def create_refrigerant_diff_device(cls, unit_id: int, spec_id: str, command: str,
+                                       hp_addr: int, ref_addr: int, used: int = 1) -> DeviceSpec:
+        """Create a refrigerant difference device (condensing sat. temp minus reference temp).
+
+        Uses RefrigerantDiffConverter: t_sat(hp_addr / 100) - ref_addr / 10.
+        Gated to steady-state compressor operation.
+        Unit is Kelvin (temperature difference).
+
+        Args:
+            hp_addr: High-pressure address (raw value divided by 100 to get bar)
+            ref_addr: Reference temperature address (raw value divided by 10 to get °C)
+        """
+        return DeviceSpec(
+            unit_id=unit_id,
+            spec_id=spec_id,
+            command=command,
+            address=[hp_addr, ref_addr],
+            read_converter=cls._refrigerant_diff_converter,
+            read_args=(100, 10),
+            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;K'}}
+        )
+
+    @classmethod
+    def create_freq_headroom_device(cls, unit_id: int, spec_id: str, command: str,
+                                    target_addr: int, actual_addr: int, used: int = 1) -> DeviceSpec:
+        """Create a frequency headroom device (target minus actual compressor frequency).
+
+        Uses FreqHeadroomConverter: target_addr - actual_addr in Hz.
+        Gated to compressor-on (actual > 0); no settling requirement.
+        Unit is Hz.
+
+        Args:
+            target_addr: Controller target frequency address
+            actual_addr: Actual compressor frequency address
+        """
+        return DeviceSpec(
+            unit_id=unit_id,
+            spec_id=spec_id,
+            command=command,
+            address=[target_addr, actual_addr],
+            read_converter=cls._freq_headroom_converter,
+            read_args=(),
+            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;Hz'}}
         )
 
 
@@ -1807,7 +1856,13 @@ class LuxtronikPlugin:
                 144, 'compressor_capacity', 'READ_CALCUL',
                 LuxtronikAddress.COMPRESSOR_FREQ, LuxtronikAddress.COMPRESSOR_FREQ_MAX, used=1),
             
-            # Units 145-159: Reserved for future compressor devices
+            # Unit 145: Frequency headroom (target minus actual compressor frequency)
+            # Gated: only reports while compressor is running (actual > 0)
+            DeviceFactory.create_freq_headroom_device(
+                145, 'freq_headroom', 'READ_CALCUL',
+                LuxtronikAddress.TARGET_FREQUENCY, LuxtronikAddress.COMPRESSOR_FREQ),
+
+            # Units 146-159: Reserved for future compressor devices
             
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 12: REFRIGERANT CIRCUIT (Units 160-179)
@@ -1887,7 +1942,27 @@ class LuxtronikPlugin:
                 LuxtronikAddress.CONDENSING_PRESSURE, 'bar', divider=100,
                 gated=True, used=0),
 
-            # Units 171-179: Reserved for future refrigerant devices
+            # Unit 171: Refrigerant lift (condensing sat. temp - evaporating temp)
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_refrigerant_diff_device(
+                171, 'refrigerant_lift', 'READ_CALCUL',
+                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.EVAPORATING_TEMP),
+
+            # Unit 172: Condenser approach (condensing sat. temp - heat supply temp)
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_refrigerant_diff_device(
+                172, 'condenser_approach', 'READ_CALCUL',
+                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.HEAT_SUPPLY_TEMP),
+
+            # Unit 173: Discharge headroom (hot-gas trip setpoint - actual hot gas temp)
+            # Margin remaining before the T-HG protection limit is reached (~115 C)
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_temp_diff_device(
+                173, 'discharge_headroom', 'READ_CALCUL',
+                [LuxtronikAddress.HOT_GAS_MAX_SETPOINT, LuxtronikAddress.HOT_GAS_TEMP],
+                divider=10, gated=True),
+
+            # Units 174-179: Reserved for future refrigerant devices
             
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 13: STATISTICS & COUNTERS (Units 180-199)
