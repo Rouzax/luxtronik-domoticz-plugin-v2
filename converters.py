@@ -593,12 +593,10 @@ class RefrigerantDiffConverter(SteadyStateGateMixin, DataConverter):
     Gated to steady-state compressor operation (SteadyStateGateMixin).
     """
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], *args) -> GatedResult:
+    def convert(self, data_store: DataStore, command: str, indices: List[int], hp_divider: float = 100, ref_divider: float = 10) -> GatedResult:
         gate_reason = self.check_steady_state(data_store)
         if gate_reason:
             return (None, gate_reason)
-
-        hp_divider, ref_divider = args
 
         try:
             calc = data_store.get(command, [])
@@ -635,7 +633,7 @@ class FreqHeadroomConverter(DataConverter):
                 return (None, "idle (compressor off)")
             target = calc[target_addr]
             return ({'sValue': str(int(round(target - actual)))}, None)
-        except (IndexError, TypeError, ZeroDivisionError) as e:
+        except (IndexError, TypeError) as e:
             context.logger.log(
                 f"FreqHeadroomConverter error: {type(e).__name__}: {e}",
                 DebugLevel.VERBOSE
