@@ -1,0 +1,11 @@
+# Keep `git archive` output and GitHub Release "Source code" assets lean.
+# Domoticz only imports the Python modules at runtime; everything below is dev/
+# publishing cruft that should NOT land in a plugin install.
+docs/                export-ignore
+tests/               export-ignore
+site/                export-ignore
+migration/           export-ignore
+.github/             export-ignore
+requirements-dev.txt export-ignore
+.gitignore           export-ignore
+.gitattributes       export-ignore
