@@ -73,6 +73,7 @@ class LuxtronikAddress:
     COMPRESSOR_FREQ = 231
     EVAPORATING_TEMP = 232         # Vapourisation_Temperature
     LIQUID_LINE_TEMP = 233         # TFL - Liquid refrigerant temp before expansion valve
+    CONDENSING_TEMP_CALC = 233     # calc[233] = controller's computed condensing (saturation) temp; same address, clearer name.
     TARGET_FREQUENCY = 236         # ID_WEB_Freq_VD_Soll - controller target frequency
     COMPRESSOR_FREQ_MIN = 237      # ID_WEB_Freq_VD_Min - minimum frequency target
     COMPRESSOR_FREQ_MAX = 238      # Freq_VD_Max - maximum frequency

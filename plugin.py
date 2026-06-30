@@ -113,6 +113,7 @@ from converters import (
     TextStateConverter, COPCalculatorConverter, CapacityConverter,
     LastCycleConverter, CycleTracker,
     RefrigerantDiffConverter, FreqHeadroomConverter,
+    CompressionRatioConverter, DischargeHeadroomConverter,
     WriteConverter, CommandToNumberConverter, LevelWithDividerConverter, AvailableWritesConverter,
 )
 
@@ -213,7 +214,8 @@ class TranslationManager:
     # Maps current spec_id → old spec_id for devices that were renamed.
     # Used to detect old translated names so they can be auto-renamed.
     _RENAMED_SPECS = {
-        'liquid_line_temp': 'condensing_temp',
+        'condensing_temp': 'liquid_line_temp',        # 164: calc[233] is condensing temp (was mislabeled liquid line)
+        'compressor_heating_temp': 'discharge_temp',  # 162: calc[177] is compressor heating, not discharge
     }
 
     LANGUAGE_MAP = {
@@ -875,6 +877,8 @@ class DeviceFactory:
     _last_cycle_converter = LastCycleConverter()
     _refrigerant_diff_converter = RefrigerantDiffConverter()
     _freq_headroom_converter = FreqHeadroomConverter()
+    _compression_ratio_converter = CompressionRatioConverter()
+    _discharge_headroom_converter = DischargeHeadroomConverter()
     
     @classmethod
     def create_temperature_device(cls, unit_id: int, spec_id: str, command: str, 
@@ -1369,6 +1373,52 @@ class DeviceFactory:
             read_converter=cls._freq_headroom_converter,
             read_args=(),
             device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;Hz'}}
+        )
+
+    @classmethod
+    def create_compression_ratio_device(cls, unit_id: int, spec_id: str, command: str,
+                                        hp_addr: int, np_addr: int, used: int = 1) -> DeviceSpec:
+        """Create a compression ratio device (HD / ND on absolute pressures).
+
+        Uses CompressionRatioConverter: (hp_addr/100 + atm) / (np_addr/100 + atm).
+        Gated to steady-state compressor operation.
+        Dimensionless ratio (no unit suffix).
+
+        Args:
+            hp_addr: High-pressure gauge address (raw value / 100 = bar gauge)
+            np_addr: Low-pressure gauge address (raw value / 100 = bar gauge)
+        """
+        return DeviceSpec(
+            unit_id=unit_id,
+            spec_id=spec_id,
+            command=command,
+            address=[hp_addr, np_addr],
+            read_converter=cls._compression_ratio_converter,
+            read_args=(),
+            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;'}}
+        )
+
+    @classmethod
+    def create_discharge_headroom_device(cls, unit_id: int, spec_id: str, command: str,
+                                         setpoint_addr: int, sensor_addr: int, used: int = 1) -> DeviceSpec:
+        """Create a discharge headroom device (hot-gas trip setpoint minus hot-gas temp).
+
+        Uses DischargeHeadroomConverter: setpoint_addr/10 - sensor_addr/10 (K).
+        Gated to steady-state compressor operation only (no passive-cooling bypass).
+        Unit is Kelvin (temperature margin).
+
+        Args:
+            setpoint_addr: T-HG max setpoint address (raw value / 10 = deg C)
+            sensor_addr: Hot-gas temperature address (raw value / 10 = deg C)
+        """
+        return DeviceSpec(
+            unit_id=unit_id,
+            spec_id=spec_id,
+            command=command,
+            address=[setpoint_addr, sensor_addr],
+            read_converter=cls._discharge_headroom_converter,
+            read_args=(10,),
+            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;K'}}
         )
 
 
@@ -1881,11 +1931,12 @@ class LuxtronikPlugin:
                 161, 'suction_temp', 'READ_CALCUL', 
                 LuxtronikAddress.SUCTION_TEMP, used=1),
             
-            # Unit 162: Discharge line temperature (after initial condenser cooling)
+            # Unit 162: Compressor body heating temperature (LIN inverter sensor)
+            # Not discharge-line gas; measures the compressor housing heat rejection.
             DeviceFactory.create_temperature_device(
-                162, 'discharge_temp', 'READ_CALCUL',
+                162, 'compressor_heating_temp', 'READ_CALCUL',
                 LuxtronikAddress.DISCHARGE_TEMP, used=1),
-            
+
             # Unit 163: Evaporating temperature (refrigerant evaporation point)
             # Gated: meaningless during idle and passive cooling (refrigerant values)
             DeviceFactory.create_custom_device(
@@ -1893,76 +1944,68 @@ class LuxtronikPlugin:
                 LuxtronikAddress.EVAPORATING_TEMP, '°C', divider=10,
                 gated=True, precision='0.1', used=1),
 
-            # Unit 164: Liquid line temperature (TFL - before expansion valve)
+            # Unit 164: Condensing temperature (controller's saturation temp, calc[233])
+            # Same address as liquid line but confirmed as controller-computed condensing temp.
             # Gated: meaningless during idle and passive cooling (refrigerant values)
             DeviceFactory.create_custom_device(
-                164, 'liquid_line_temp', 'READ_CALCUL',
-                LuxtronikAddress.LIQUID_LINE_TEMP, '°C', divider=10,
+                164, 'condensing_temp', 'READ_CALCUL',
+                LuxtronikAddress.CONDENSING_TEMP_CALC, '°C', divider=10,
                 gated=True, precision='0.1', used=1),
-            
+
             # Unit 165: Superheat monitoring
             # Gated: stale readings during idle corrupt operating averages
             DeviceFactory.create_custom_device(
-                165, 'superheat', 'READ_CALCUL', 
+                165, 'superheat', 'READ_CALCUL',
                 LuxtronikAddress.SUPERHEAT, 'K', divider=10, gated=True, used=1),
-            
+
             # --- Pressures (Units 166-167) ---
-            
+
             # Unit 166: High pressure monitoring
             # Gated: equilibrates to ambient when off, not operationally meaningful
             DeviceFactory.create_custom_device(
-                166, 'high_pressure', 'READ_CALCUL', 
+                166, 'high_pressure', 'READ_CALCUL',
                 LuxtronikAddress.HIGH_PRESSURE, 'bar', divider=100, gated=True, used=1),
-            
+
             # Unit 167: Low pressure monitoring
             # Gated: equilibrates to ambient when off, not operationally meaningful
             DeviceFactory.create_custom_device(
-                167, 'low_pressure', 'READ_CALCUL', 
+                167, 'low_pressure', 'READ_CALCUL',
                 LuxtronikAddress.LOW_PRESSURE, 'bar', divider=100, gated=True, used=1),
-            
-            # Unit 168: Condensing temperature (from firmware calculation)
-            # Gated: meaningless during idle (refrigerant equilibrates)
-            DeviceFactory.create_custom_device(
-                168, 'condensing_temp', 'READ_CALCUL',
-                LuxtronikAddress.CONDENSING_TEMP, '°C', divider=10,
-                gated=True, precision='0.1', used=0),
 
-            # Unit 169: Subcooling (condensing temp - liquid line temp)
-            # Indicates refrigerant charge health. Trending changes signal issues.
-            # Gated: only meaningful during steady-state operation
-            DeviceFactory.create_temp_diff_device(
-                169, 'subcooling', 'READ_CALCUL',
-                [LuxtronikAddress.CONDENSING_TEMP, LuxtronikAddress.LIQUID_LINE_TEMP],
-                gated=True, used=0),
+            # Units 168-170: Retired (calc[258] condensing temp, subcooling, condensing pressure).
+            # Replaced by calc[233] condensing temp on unit 164 and calc-based lift/approach.
 
-            # Unit 170: Condensing pressure (from firmware calculation)
-            # Gated: equilibrates to ambient when off
-            DeviceFactory.create_custom_device(
-                170, 'condensing_pressure', 'READ_CALCUL',
-                LuxtronikAddress.CONDENSING_PRESSURE, 'bar', divider=100,
-                gated=True, used=0),
-
-            # Unit 171: Refrigerant lift (condensing sat. temp - evaporating temp)
+            # Unit 171: Refrigerant lift (condensing temp - evaporating temp)
+            # Uses calc[233] condensing temp directly (no P-T curve conversion).
             # Gated: only meaningful during steady-state compressor operation
-            DeviceFactory.create_refrigerant_diff_device(
+            DeviceFactory.create_temp_diff_device(
                 171, 'refrigerant_lift', 'READ_CALCUL',
-                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.EVAPORATING_TEMP),
-
-            # Unit 172: Condenser approach (condensing sat. temp - heat supply temp)
-            # Gated: only meaningful during steady-state compressor operation
-            DeviceFactory.create_refrigerant_diff_device(
-                172, 'condenser_approach', 'READ_CALCUL',
-                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.HEAT_SUPPLY_TEMP),
-
-            # Unit 173: Discharge headroom (hot-gas trip setpoint - actual hot gas temp)
-            # Margin remaining before the T-HG protection limit is reached (~115 C)
-            # Gated: only meaningful during steady-state compressor operation
-            DeviceFactory.create_temp_diff_device(
-                173, 'discharge_headroom', 'READ_CALCUL',
-                [LuxtronikAddress.HOT_GAS_MAX_SETPOINT, LuxtronikAddress.HOT_GAS_TEMP],
+                [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.EVAPORATING_TEMP],
                 divider=10, gated=True),
 
-            # Units 174-179: Reserved for future refrigerant devices
+            # Unit 172: Condenser approach (condensing temp - heat supply temp)
+            # Uses calc[233] condensing temp directly (no P-T curve conversion).
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_temp_diff_device(
+                172, 'condenser_approach', 'READ_CALCUL',
+                [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.HEAT_SUPPLY_TEMP],
+                divider=10, gated=True),
+
+            # Unit 173: Discharge headroom (T-HG max setpoint - actual hot gas temp)
+            # Margin remaining before the hot-gas trip limit is reached (~115 C).
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_discharge_headroom_device(
+                173, 'discharge_headroom', 'READ_CALCUL',
+                LuxtronikAddress.HOT_GAS_MAX_SETPOINT, LuxtronikAddress.HOT_GAS_TEMP),
+
+            # Unit 174: Compression ratio (HD / ND on absolute pressures)
+            # Rising ratio over time flags refrigerant-circuit degradation.
+            # Gated: only meaningful during steady-state compressor operation
+            DeviceFactory.create_compression_ratio_device(
+                174, 'compression_ratio', 'READ_CALCUL',
+                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.LOW_PRESSURE, used=1),
+
+            # Units 175-179: Reserved for future refrigerant devices
             
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 13: STATISTICS & COUNTERS (Units 180-199)

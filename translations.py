@@ -989,14 +989,18 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
 
     'condensing_temp': {
             'name': {
-                Language.ENGLISH: 'Condensing temp',
+                Language.ENGLISH: 'Condensing temperature',
                 Language.DUTCH: 'Condensatietemp',
                 Language.GERMAN: 'Kondensationstemp.',
                 Language.FRENCH: 'Temp. condensation',
                 Language.POLISH: 'Temp skraplania',
             },
             'description': {
-                Language.ENGLISH: 'Refrigerant condensation temperature (hot side).\nDerived from firmware calculation at condenser.\nUsed with liquid line temp to calculate subcooling.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.ENGLISH: 'Controller-computed condensing (saturation) temperature from calc[233].\nConfirmed via t_sat(HD/100 + 1.013): same address as liquid line, correct interpretation is condensing temp.\nUsed for refrigerant lift and condenser approach calculations.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.DUTCH: 'Door controller berekende condensatietemperatuur (verzadiging) uit calc[233].\nBevestigd via t_sat(HD/100 + 1.013): zelfde adres als vloeistoflijn, juiste interpretatie is condensatietemp.\nGebruikt voor koudemiddellift en condensoraanloopberekeningen.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Vom Regler berechnete Kondensationstemperatur (Saettigung) aus calc[233].\nBestaetigt via t_sat(HD/100 + 1.013): gleiche Adresse wie Fluessigkeitsleitung, korrekte Interpretation ist Kondensationstemp.\nVerwendet fuer Kaetemittelhub und Kondensatorspread-Berechnungen.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Temperature de condensation (saturation) calculee par le regulateur depuis calc[233].\nConfirmee via t_sat(HD/100 + 1.013): meme adresse que ligne liquide, interpretation correcte est temp. condensation.\nUtilisee pour les calculs de levee refrigerant et approche condenseur.\n\n⚡ GATED: Mises a jour uniquement en regime etabli.',
+                Language.POLISH: 'Obliczona przez sterownik temperatura kondensacji (nasycenia) z calc[233].\nPotwierdzona przez t_sat(HD/100 + 1.013): ten sam adres co linia cieczowa, poprawna interpretacja to temp. kondensacji.\nUzywana do obliczen wzniosu czynnika i roznicy skraplacza.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
             },
     },
     'subcooling': {
@@ -1069,6 +1073,38 @@ DEVICE_TRANSLATIONS: Dict[str, Dict[str, Dict[Language, str]]] = {
                 Language.DUTCH: 'Resterende marge tot de heetgas-beveiligingsgrens (T-HG max, ~115 C).\nBerekend als instelwaarde minus actuele heetgastemperatuur.\nAfnemende marge wijst op hoge druk op koudemiddel of laag niveau.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
                 Language.GERMAN: 'Verbleibende Reserve bis zur Heißgas-Schutzgrenze (T-HG max, ~115 C).\nBerechnet als Sollwert minus Ist-Heißgastemperatur.\nAbnehmende Reserve deutet auf hohe Kältemittelbelastung hin.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
                 Language.FRENCH: 'Marge restante jusqu\'au seuil de protection du gaz de refoulement (T-HG max, ~115 C).\nCalculée comme valeur de consigne moins température réelle.\nUne marge décroissante indique stress réfrigérant ou charge insuffisante.\n\n⚡ GATED: Mises à jour uniquement en régime établi.',
+            },
+    },
+    'compressor_heating_temp': {
+            'name': {
+                Language.ENGLISH: 'Compressor heating temp',
+                Language.POLISH: 'Temp grzania sprężarki',
+                Language.DUTCH: 'Compressor verwarmingstemp',
+                Language.GERMAN: 'Verdichter-Heiztemp.',
+                Language.FRENCH: 'Temp. chauffage compresseur',
+            },
+            'description': {
+                Language.ENGLISH: 'LIN inverter or compressor body heating sensor (calc[177]).\nNot a discharge-gas temperature; measures heat rejection at the compressor housing.\nUseful for monitoring inverter thermal load.',
+                Language.POLISH: 'Czujnik grzania falownika LIN lub obudowy sprężarki (calc[177]).\nNie jest to temperatura gazu tłoczonego; mierzy oddawanie ciepła przez obudowę sprężarki.\nPrzydatny do monitorowania obciążenia cieplnego falownika.',
+                Language.DUTCH: 'LIN-omvormer of compressorbehuizing verwarmingssensor (calc[177]).\nGeen persgas-temperatuur; meet warmteafgifte van de compressorbehuizing.\nNuttig voor bewaking van de thermische belasting van de omvormer.',
+                Language.GERMAN: 'LIN-Wechselrichter oder Verdichtergehaeuse-Heizsensor (calc[177]).\nKeine Druckgas-Temperatur; misst Waermeabgabe am Verdichtergehaeuse.\nNuetzlich zur Ueberwachung der thermischen Last des Wechselrichters.',
+                Language.FRENCH: 'Capteur de chauffage onduleur LIN ou corps compresseur (calc[177]).\nPas une temperature de gaz de refoulement; mesure le rejet de chaleur du carter compresseur.\nUtile pour surveiller la charge thermique de l\'onduleur.',
+            },
+    },
+    'compression_ratio': {
+            'name': {
+                Language.ENGLISH: 'Compression ratio',
+                Language.POLISH: 'Stopien sprezania',
+                Language.DUTCH: 'Compressieverhouding',
+                Language.GERMAN: 'Druckverhaeltnis',
+                Language.FRENCH: 'Taux de compression',
+            },
+            'description': {
+                Language.ENGLISH: 'Ratio of high-side to low-side absolute pressure (HD / ND, gauge + atmospheric).\nA rising trend over time flags refrigerant-circuit degradation: fouling, charge loss, or restriction.\nDimensionless; typical range 2-5 for ground-source heat pumps.\n\n⚡ GATED: Only updates during steady-state operation.',
+                Language.POLISH: 'Stosunek cisnien absolutnych strony wysokocisnieniowej do nicocisnieniowej (HD / ND, manometryczne + atmosferyczne).\nRosnacy trend sygnalizuje degradacje obiegu czynnika: zanieczyszczenie, utrate napelnienia lub restrykcje.\nBezwymiarowy; typowy zakres 2-5 dla pomp ciepla gruntowych.\n\n⚡ BRAMKOWANY: Aktualizuje tylko w stanie ustalonym.',
+                Language.DUTCH: 'Verhouding van absolute druk hogedrukzijde tot lagedrukzijde (HD / ND, overdruk + atmosferisch).\nEen stijgende trend wijst op degradatie van het koudemiddelcircuit: vervuiling, ladingverlies of beperking.\nDimensieloos; typisch bereik 2-5 voor bodemwarmtepompen.\n\n⚡ GATED: Alleen updates tijdens stabiele werking.',
+                Language.GERMAN: 'Verhaeltnis des absoluten Drucks Hochdruckseite zu Niederdruckseite (HD / ND, Manometer + Atmosphaere).\nEin steigender Trend weist auf Kaetemittelkreis-Degradation hin: Verschmutzung, Ladungsverlust oder Restriktion.\nDimensionslos; typischer Bereich 2-5 fuer Erdwaermepumpen.\n\n⚡ GATED: Aktualisiert nur im stabilen Betrieb.',
+                Language.FRENCH: 'Rapport de pression absolue cote haute pression sur cote basse pression (HD / ND, manometrique + atmospherique).\nUne tendance croissante signale une degradation du circuit frigorifique: encrassement, perte de charge ou restriction.\nSans dimension; plage typique 2-5 pour pompes a chaleur geothermiques.\n\n⚡ GATED: Mises a jour uniquement en regime etabli.',
             },
     },
     'cooling_release_timer': {
