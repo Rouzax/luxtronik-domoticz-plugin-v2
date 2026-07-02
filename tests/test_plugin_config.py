@@ -1,3 +1,5 @@
+import pytest
+
 from addresses import ConfigLimits
 from plugin_config import PluginConfig, read_plugin_config
 
@@ -26,12 +28,28 @@ def test_full_params():
     )
 
 
-def test_defaults_when_missing_or_invalid():
-    cfg = read_plugin_config({"Address": "1.2.3.4", "Port": "x", "Mode6": "nope"})
+def _valid_required():
+    return {"Address": "1.2.3.4", "Port": "8889", "Mode3": "1"}
+
+
+def test_guarded_fields_default_on_invalid():
+    cfg = read_plugin_config({**_valid_required(), "Mode6": "nope", "Mode2": "x"})
     assert cfg.debug_level == 0
-    assert cfg.port == 0
     assert cfg.heartbeat_raw == ConfigLimits.HEARTBEAT_DEFAULT
+
+
+def test_optional_get_fields_default_when_missing():
+    cfg = read_plugin_config(_valid_required())
     assert cfg.max_cop_raw == "30"
     assert cfg.pump_comp_enable_raw == "0"
     assert cfg.pump_comp_params_raw == "2,60,3,140"
-    assert cfg.language == ""
+
+
+def test_missing_required_key_raises():
+    with pytest.raises(KeyError):
+        read_plugin_config({"Port": "8889", "Mode3": "1"})  # no Address
+
+
+def test_invalid_port_raises():
+    with pytest.raises(ValueError):
+        read_plugin_config({"Address": "1.2.3.4", "Port": "notaport", "Mode3": "1"})

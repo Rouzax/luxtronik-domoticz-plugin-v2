@@ -2,6 +2,8 @@
 
 No Domoticz import: this operates on a plain dict so it is trivially testable.
 Each field reproduces the exact transform onStart used inline.
+Address, Port, Mode3 reproduce the original bracket/int() reads (raise on missing/invalid),
+matching onStart's behavior where the outer onStart try/except handles the abort.
 """
 
 from dataclasses import dataclass
@@ -31,9 +33,9 @@ def _int_or(params: dict, key: str, default: int) -> int:
 def read_plugin_config(params: dict) -> PluginConfig:
     return PluginConfig(
         debug_level=_int_or(params, "Mode6", 0),
-        language=params.get("Mode3", ""),
-        address=params.get("Address", ""),
-        port=_int_or(params, "Port", 0),
+        language=params["Mode3"],
+        address=params["Address"],
+        port=int(params["Port"]),
         heartbeat_raw=_int_or(params, "Mode2", ConfigLimits.HEARTBEAT_DEFAULT),
         max_cop_raw=params.get("Mode1", "30"),
         pump_comp_enable_raw=params.get("Mode4", "0"),
