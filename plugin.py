@@ -99,8 +99,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-import DomoticzEx as Domoticz
-
 import domoticz_api
 from addresses import ConfigLimits, LuxtronikAddress, SocketCommand
 from context import DebugLevel
@@ -2233,18 +2231,15 @@ class LuxtronikPlugin:
                 spec.device_params["Description"] = description
 
             # Check if device exists
-            if device_id not in Devices or unit_id not in Devices[device_id].Units:
+            if not domoticz_api.unit_exists(_devices(), device_id, unit_id):
                 # Create new unit
-                unit = Domoticz.Unit(
-                    Name=full_name, DeviceID=device_id, Unit=unit_id, **spec.device_params
-                )
-                unit.Create()
+                domoticz_api.create_unit(device_id, unit_id, full_name, spec.device_params)
                 _logger.log(
                     f"Created device {unit_id} (spec_id={spec.spec_id}): {name}", DebugLevel.DEVICE
                 )
             else:
                 # Device exists - check if it should be updated
-                existing_unit = Devices[device_id].Units[unit_id]
+                existing_unit = domoticz_api.get_unit(_devices(), device_id, unit_id)
                 current_name = existing_unit.Name
                 needs_options_update = False
                 needs_properties_update = False
@@ -2342,11 +2337,11 @@ class LuxtronikPlugin:
         spec = self._device_specs[unit_id]
         device_id = self._device_id
 
-        if device_id not in Devices or unit_id not in Devices[device_id].Units:
+        if not domoticz_api.unit_exists(_devices(), device_id, unit_id):
             _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) not found", DebugLevel.DEVICE)
             return False
 
-        unit = Devices[device_id].Units[unit_id]
+        unit = domoticz_api.get_unit(_devices(), device_id, unit_id)
         needs_update, reason, diff = self.update_tracker.needs_update(unit, new_values)
 
         if needs_update:
@@ -2752,6 +2747,13 @@ class LuxtronikPlugin:
 # =============================================================================
 # Plugin Instance and Callbacks
 # =============================================================================
+
+
+def _devices():
+    """The framework-injected Devices mapping (None before onStart)."""
+    return globals().get("Devices")
+
+
 _plugin = LuxtronikPlugin()
 
 
