@@ -488,6 +488,9 @@ sudo systemctl start domoticz
 
 ## Changelog
 
+### Version 2.1.2
+- Fixed: control commands (mode selectors, setpoints) could silently stop working after a plugin restart. The plugin no longer registers custom device classes, which failed to register on a reload; command handling now uses the standard module-level handler, so selector switches and setpoints reliably send their validated writes. This also removes the two "class registration failed" errors that appeared in the Domoticz log at startup. Existing devices are unaffected (no re-creation or renaming).
+
 ### Version 2.1.1
 - Added `externallink` to the plugin definition (links to the GitHub repository from the Domoticz hardware page, and lets plugin managers reliably match the installed plugin to its repository)
 
