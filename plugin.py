@@ -101,6 +101,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import DomoticzEx as Domoticz
 
+import domoticz_api
 from addresses import ConfigLimits, LuxtronikAddress, SocketCommand
 from context import DebugLevel
 from converters import (
@@ -182,7 +183,7 @@ class DebugLogger:
 
         # BASIC uses Status() for UI visibility, others use Debug()
         if level == DebugLevel.BASIC:
-            Domoticz.Status(message)
+            domoticz_api.log_status(message)
         else:
             # Add level prefix for clarity in logs
             prefix = {
@@ -190,9 +191,9 @@ class DebugLogger:
                 DebugLevel.COMMS: "[COMMS]",
                 DebugLevel.VERBOSE: "[VERBOSE]",
             }.get(level, "[DEBUG]")
-            Domoticz.Debug(f"{prefix} {message}")
+            domoticz_api.log_debug(f"{prefix} {message}")
 
-    def error(self, message: str, exc: Exception = None) -> None:
+    def error(self, message: str, exc: Exception | None = None) -> None:
         """Log an error message. Always logs regardless of level.
 
         Args:
@@ -200,13 +201,13 @@ class DebugLogger:
             exc: Optional exception to include type information
         """
         if exc:
-            Domoticz.Error(f"{message} ({type(exc).__name__}: {exc})")
+            domoticz_api.log_error(f"{message} ({type(exc).__name__}: {exc})")
         else:
-            Domoticz.Error(message)
+            domoticz_api.log_error(message)
 
     def warning(self, message: str) -> None:
         """Log a warning message. Always logs regardless of level."""
-        Domoticz.Status(f"Warning: {message}")
+        domoticz_api.log_status(f"Warning: {message}")
 
 
 # Global logger instance
@@ -2623,7 +2624,7 @@ class LuxtronikPlugin:
                 )
             else:
                 # This is an important warning, always show it
-                Domoticz.Status(
+                domoticz_api.log_status(
                     "COP Warning: For accurate COP averages, enable "
                     "Settings → Log History → 'Only add newly received values to the Log'. "
                     "Currently disabled - stale values will be logged during idle periods."
@@ -2648,11 +2649,11 @@ class LuxtronikPlugin:
             except (ValueError, TypeError, KeyError):
                 _logger.level = 0
             if _logger.level == DebugLevel.NONE:
-                Domoticz.Debugging(0)  # Silence everything
+                domoticz_api.set_debugging(0)  # Silence everything
             elif _logger.level == DebugLevel.ALL:
-                Domoticz.Debugging(62)  # Plugin Debug() + framework device/connection info
+                domoticz_api.set_debugging(62)  # Plugin Debug() + framework device/connection info
             else:
-                Domoticz.Debugging(2)  # Only plugin Debug() calls, no framework noise
+                domoticz_api.set_debugging(2)  # Only plugin Debug() calls, no framework noise
 
             _logger.log("Plugin starting", DebugLevel.BASIC)
 
@@ -2680,7 +2681,7 @@ class LuxtronikPlugin:
             except (ValueError, TypeError, KeyError):
                 requested_heartbeat = ConfigLimits.HEARTBEAT_DEFAULT
             heartbeat = self._validate_heartbeat(requested_heartbeat)
-            Domoticz.Heartbeat(heartbeat)
+            domoticz_api.set_heartbeat(heartbeat)
             _heartbeat_interval = heartbeat
             _logger.log(f"Heartbeat set to {heartbeat}s", DebugLevel.BASIC)
 
