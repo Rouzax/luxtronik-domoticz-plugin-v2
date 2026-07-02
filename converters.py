@@ -3,14 +3,14 @@
 Extracted from plugin.py. Does not import DomoticzEx or plugin.
 Shared runtime state is accessed via the context module.
 """
-from abc import ABC, abstractmethod
+
 import math
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from addresses import LuxtronikAddress, ConfigLimits
 import context
+from addresses import ConfigLimits, LuxtronikAddress
 from context import DebugLevel
-
 
 # =============================================================================
 # Data Converters (Strategy Pattern)
@@ -71,10 +71,12 @@ class SteadyStateGateMixin:
             None if gate passes (steady-state operation for sufficient duration)
             String with reason if gated (idle, ramping, or settling)
         """
-        calc_data = data_store.get('READ_CALCUL', [])
+        calc_data = data_store.get("READ_CALCUL", [])
 
         # Ensure we have enough data
-        if len(calc_data) <= max(LuxtronikAddress.COMPRESSOR_FREQ, LuxtronikAddress.COMPRESSOR_FREQ_MIN):
+        if len(calc_data) <= max(
+            LuxtronikAddress.COMPRESSOR_FREQ, LuxtronikAddress.COMPRESSOR_FREQ_MIN
+        ):
             self._steady_count = 0
             return "insufficient data"
 
@@ -97,8 +99,10 @@ class SteadyStateGateMixin:
             required = math.ceil(ConfigLimits.SETTLING_SECONDS / context.heartbeat_interval)
 
             if self._steady_count < required:
-                return (f"settling ({self._steady_count}/{required} heartbeats, "
-                        f"freq={actual_freq:.0f} Hz)")
+                return (
+                    f"settling ({self._steady_count}/{required} heartbeats, "
+                    f"freq={actual_freq:.0f} Hz)"
+                )
 
             # Gate passes - steady-state for sufficient duration
             return None
@@ -111,33 +115,45 @@ class SteadyStateGateMixin:
 class FloatConverter(DataConverter):
     """Converts data to float value."""
 
-    def convert(self, data_store: DataStore, command: str, address: int, divider: float = 10) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, divider: float = 10
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
             value = float(data_list[address]) / divider
-            return {'sValue': str(value)}
+            return {"sValue": str(value)}
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"FloatConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'sValue': '0.0'}
+            context.logger.log(
+                f"FloatConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
+            return {"sValue": "0.0"}
 
 
 class NumberConverter(DataConverter):
     """Converts data to integer value."""
 
-    def convert(self, data_store: DataStore, command: str, address: int, divider: float = 1.0) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, divider: float = 1.0
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
             value = int(data_list[address] / divider)
-            return {'nValue': value}
+            return {"nValue": value}
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"NumberConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'nValue': 0}
+            context.logger.log(
+                f"NumberConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
+            return {"nValue": 0}
 
 
 class SelectorSwitchConverter(DataConverter):
     """Converts data to selector switch level."""
 
-    def convert(self, data_store: DataStore, command: str, address: int, mapping: List[int]) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, mapping: List[int]
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
             value = data_list[address]
@@ -145,13 +161,15 @@ class SelectorSwitchConverter(DataConverter):
                 level = mapping.index(value) * 10
             else:
                 # Default to first option if value not in mapping
-                context.logger.log(f"Selector value {value} not in mapping {mapping}, defaulting to 0",
-                                   DebugLevel.VERBOSE)
+                context.logger.log(
+                    f"Selector value {value} not in mapping {mapping}, defaulting to 0",
+                    DebugLevel.VERBOSE,
+                )
                 level = 0
-            return {'nValue': level, 'sValue': str(level)}
+            return {"nValue": level, "sValue": str(level)}
         except (IndexError, ValueError) as e:
             context.logger.error("SelectorSwitchConverter error", exc=e)
-            return {'nValue': 0, 'sValue': '0'}
+            return {"nValue": 0, "sValue": "0"}
 
 
 class InstantPowerConverter(DataConverter):
@@ -162,16 +180,20 @@ class InstantPowerConverter(DataConverter):
             data_list = data_store.get(command, [])
             idx = address[0] if isinstance(address, list) else address
             power = float(data_list[idx])
-            return {'sValue': f"{power:.1f}"}
+            return {"sValue": f"{power:.1f}"}
         except (IndexError, TypeError) as e:
-            context.logger.log(f"InstantPowerConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'sValue': "0.0"}
+            context.logger.log(
+                f"InstantPowerConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
+            return {"sValue": "0.0"}
 
 
 class InstantPowerSplitConverter(DataConverter):
     """Splits instant power based on operating mode."""
 
-    def convert(self, data_store: DataStore, command: str, address: int, config: List) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, config: List
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
             state_idx, valid_states = config
@@ -181,10 +203,12 @@ class InstantPowerSplitConverter(DataConverter):
             current_state = int(data_list[state_idx])
 
             result_power = power if current_state in valid_states else 0.0
-            return {'sValue': f"{result_power:.1f}"}
+            return {"sValue": f"{result_power:.1f}"}
         except (IndexError, TypeError, ValueError) as e:
-            context.logger.log(f"InstantPowerSplitConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'sValue': "0.0"}
+            context.logger.log(
+                f"InstantPowerSplitConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
+            return {"sValue": "0.0"}
 
 
 class RuntimeHoursConverter(DataConverter):
@@ -199,10 +223,13 @@ class RuntimeHoursConverter(DataConverter):
             data_list = data_store.get(command, [])
             seconds = float(data_list[address])
             hours = seconds / 3600
-            return {'nValue': 0, 'sValue': f"{hours:.0f}"}
+            return {"nValue": 0, "sValue": f"{hours:.0f}"}
         except (IndexError, TypeError) as e:
-            context.logger.log(f"RuntimeHoursConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'nValue': 0, 'sValue': '0'}
+            context.logger.log(
+                f"RuntimeHoursConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
+            return {"nValue": 0, "sValue": "0"}
 
 
 class IntegerValueConverter(DataConverter):
@@ -216,10 +243,13 @@ class IntegerValueConverter(DataConverter):
         try:
             data_list = data_store.get(command, [])
             value = int(data_list[address])
-            return {'nValue': 0, 'sValue': str(value)}
+            return {"nValue": 0, "sValue": str(value)}
         except (IndexError, TypeError) as e:
-            context.logger.log(f"IntegerValueConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'nValue': 0, 'sValue': '0'}
+            context.logger.log(
+                f"IntegerValueConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
+            return {"nValue": 0, "sValue": "0"}
 
 
 class BooleanSwitchConverter(DataConverter):
@@ -233,15 +263,19 @@ class BooleanSwitchConverter(DataConverter):
         try:
             data_list = data_store.get(command, [])
             value = bool(int(data_list[address]))
-            return {'nValue': 1 if value else 0, 'sValue': 'On' if value else 'Off'}
+            return {"nValue": 1 if value else 0, "sValue": "On" if value else "Off"}
         except (IndexError, TypeError, ValueError) as e:
-            context.logger.log(f"BooleanSwitchConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'nValue': 0, 'sValue': 'Off'}
+            context.logger.log(
+                f"BooleanSwitchConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
+            return {"nValue": 0, "sValue": "Off"}
 
 
 # =============================================================================
 # translate() helper -- wraps context.translator for converter use
 # =============================================================================
+
 
 def translate(key: str) -> str:
     """Shorthand for working mode status translation lookup."""
@@ -252,18 +286,23 @@ def translate(key: str) -> str:
 # Gated and complex read converters (extracted from plugin.py Task 4)
 # =============================================================================
 
+
 class TempDiffConverter(DataConverter):
     """Calculates temperature difference between two sensors."""
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], divider: float) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, indices: List[int], divider: float
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
             temp1 = float(data_list[indices[0]]) / divider
             temp2 = float(data_list[indices[1]]) / divider
-            return {'sValue': str(round(temp1 - temp2, 1))}
+            return {"sValue": str(round(temp1 - temp2, 1))}
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"TempDiffConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'sValue': '0.0'}
+            context.logger.log(
+                f"TempDiffConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
+            return {"sValue": "0.0"}
 
 
 class GatedFloatConverter(SteadyStateGateMixin, DataConverter):
@@ -274,7 +313,9 @@ class GatedFloatConverter(SteadyStateGateMixin, DataConverter):
     values when the compressor is not running at steady-state.
     """
 
-    def convert(self, data_store: DataStore, command: str, address: int, divider: float = 10) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, divider: float = 10
+    ) -> GatedResult:
         # Check steady-state gate first
         gate_reason = self.check_steady_state(data_store)
         if gate_reason:
@@ -283,9 +324,12 @@ class GatedFloatConverter(SteadyStateGateMixin, DataConverter):
         try:
             data_list = data_store.get(command, [])
             value = float(data_list[address]) / divider
-            return ({'sValue': str(value)}, None)
+            return ({"sValue": str(value)}, None)
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"GatedFloatConverter error at address {address}: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+            context.logger.log(
+                f"GatedFloatConverter error at address {address}: {type(e).__name__}: {e}",
+                DebugLevel.VERBOSE,
+            )
             return (None, f"error: {type(e).__name__}")
 
 
@@ -296,9 +340,11 @@ class GatedTempDiffConverter(SteadyStateGateMixin, DataConverter):
     Used for brine and heating delta-T which approach zero when loops equilibrate.
     """
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], divider: float) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, indices: List[int], divider: float
+    ) -> GatedResult:
         # Allow updates during passive cooling (pumps running, delta-T is meaningful)
-        calc_data = data_store.get('READ_CALCUL', [])
+        calc_data = data_store.get("READ_CALCUL", [])
         passive_cooling = (
             len(calc_data) > LuxtronikAddress.PASSIVE_COOLING_FLAG
             and int(calc_data[LuxtronikAddress.PASSIVE_COOLING_FLAG]) == 1
@@ -313,9 +359,11 @@ class GatedTempDiffConverter(SteadyStateGateMixin, DataConverter):
             data_list = data_store.get(command, [])
             temp1 = float(data_list[indices[0]]) / divider
             temp2 = float(data_list[indices[1]]) / divider
-            return ({'sValue': str(round(temp1 - temp2, 1))}, None)
+            return ({"sValue": str(round(temp1 - temp2, 1))}, None)
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"GatedTempDiffConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+            context.logger.log(
+                f"GatedTempDiffConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
             return (None, f"error: {type(e).__name__}")
 
 
@@ -323,34 +371,35 @@ class TextStateConverter(DataConverter):
     """Converts heat pump state to text status."""
 
     # Map Luxtronik mode values to WORKING_MODE_STATUSES keys
-    MODE_NAMES = {
-        0: 'Heating',
-        1: 'DHW',
-        2: 'Swimming pool',
-        3: 'Cooling',
-        4: 'No requirement'
-    }
+    MODE_NAMES = {0: "Heating", 1: "DHW", 2: "Swimming pool", 3: "Cooling", 4: "No requirement"}
 
-    def convert(self, data_store: DataStore, command: str, address: int, config: List) -> ConvertResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, config: List
+    ) -> ConvertResult:
         try:
             data_list = data_store.get(command, [])
 
             # Check for passive cooling mode
-            if len(data_list) > LuxtronikAddress.PASSIVE_COOLING_FLAG and data_list[LuxtronikAddress.PASSIVE_COOLING_FLAG] == 1:
-                return {'nValue': 0, 'sValue': translate('Cooling')}
+            if (
+                len(data_list) > LuxtronikAddress.PASSIVE_COOLING_FLAG
+                and data_list[LuxtronikAddress.PASSIVE_COOLING_FLAG] == 1
+            ):
+                return {"nValue": 0, "sValue": translate("Cooling")}
 
             power_idx, power_threshold = config
             current_power = float(data_list[power_idx])
             current_mode = data_list[address]
 
             if current_power <= power_threshold:
-                return {'nValue': 0, 'sValue': translate('Idle')}
+                return {"nValue": 0, "sValue": translate("Idle")}
 
-            mode_key = self.MODE_NAMES.get(current_mode, 'No requirement')
-            return {'nValue': 0, 'sValue': translate(mode_key)}
+            mode_key = self.MODE_NAMES.get(current_mode, "No requirement")
+            return {"nValue": 0, "sValue": translate(mode_key)}
         except (IndexError, TypeError) as e:
-            context.logger.log(f"TextStateConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
-            return {'nValue': 0, 'sValue': translate('Idle')}
+            context.logger.log(
+                f"TextStateConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
+            return {"nValue": 0, "sValue": translate("Idle")}
 
 
 class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
@@ -376,7 +425,9 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
         """Initialize with no max COP limit (set from plugin parameters at startup)."""
         self.max_cop: Optional[float] = None
 
-    def convert(self, data_store: DataStore, command: str, address: int, config: List) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, config: List
+    ) -> GatedResult:
         """Calculate COP only during steady-state operation in allowed modes.
 
         Args:
@@ -421,9 +472,15 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
 
             # Gate 4: Basic sanity checks - filter noise
             if power_input < self.MIN_POWER_INPUT_W:
-                return (None, f"noise filter (power={power_input:.0f}W < {self.MIN_POWER_INPUT_W:.0f}W)")
+                return (
+                    None,
+                    f"noise filter (power={power_input:.0f}W < {self.MIN_POWER_INPUT_W:.0f}W)",
+                )
             if heat_output < self.MIN_HEAT_OUTPUT_W:
-                return (None, f"noise filter (heat={heat_output:.0f}W < {self.MIN_HEAT_OUTPUT_W:.0f}W)")
+                return (
+                    None,
+                    f"noise filter (heat={heat_output:.0f}W < {self.MIN_HEAT_OUTPUT_W:.0f}W)",
+                )
 
             # Calculate and return COP
             cop = heat_output / power_input
@@ -432,10 +489,12 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
             if self.max_cop is not None and cop > self.max_cop:
                 return (None, f"COP {cop:.2f} exceeds max limit ({self.max_cop:.1f})")
 
-            return ({'nValue': 0, 'sValue': f"{cop:.2f}"}, None)
+            return ({"nValue": 0, "sValue": f"{cop:.2f}"}, None)
 
         except (IndexError, TypeError, ZeroDivisionError) as e:
-            context.logger.log(f"COPCalculatorConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+            context.logger.log(
+                f"COPCalculatorConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
             return (None, f"error: {type(e).__name__}")
 
 
@@ -450,7 +509,9 @@ class CapacityConverter(SteadyStateGateMixin, DataConverter):
     Returns 0% when compressor is off (actual_freq = 0).
     """
 
-    def convert(self, data_store: DataStore, command: str, address: int, indices: List[int]) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, indices: List[int]
+    ) -> GatedResult:
         try:
             data_list = data_store.get(command, [])
             actual_idx, max_idx = indices
@@ -464,7 +525,7 @@ class CapacityConverter(SteadyStateGateMixin, DataConverter):
 
             # If compressor is off, return 0%
             if actual <= 0:
-                return ({'nValue': 0, 'sValue': "0"}, None)
+                return ({"nValue": 0, "sValue": "0"}, None)
 
             # Check steady-state gate for meaningful readings
             gate_reason = self.check_steady_state(data_store)
@@ -475,10 +536,12 @@ class CapacityConverter(SteadyStateGateMixin, DataConverter):
             percent = (actual / maximum) * 100
             percent = min(100, percent)  # Clamp to 100% max
 
-            return ({'nValue': 0, 'sValue': f"{percent:.0f}"}, None)
+            return ({"nValue": 0, "sValue": f"{percent:.0f}"}, None)
 
         except (IndexError, TypeError, ValueError) as e:
-            context.logger.log(f"CapacityConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+            context.logger.log(
+                f"CapacityConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
             return (None, f"error: {type(e).__name__}")
 
 
@@ -529,7 +592,7 @@ class CycleTracker:
                 context.logger.log(
                     f"Cycle discarded: previous={self.previous_cycle_seconds}s exceeds "
                     f"max {self.MAX_CYCLE_SECONDS}s (likely stale after reboot)",
-                    DebugLevel.VERBOSE
+                    DebugLevel.VERBOSE,
                 )
             else:
                 # Previous value was the completed cycle's duration
@@ -537,11 +600,11 @@ class CycleTracker:
 
                 # Ignore very short "cycles" (glitches, restarts)
                 if completed_minutes >= self.MIN_CYCLE_MINUTES:
-                    result = {'nValue': 0, 'sValue': f"{completed_minutes:.0f}"}
+                    result = {"nValue": 0, "sValue": f"{completed_minutes:.0f}"}
                     context.logger.log(
                         f"Cycle completed: {completed_minutes:.0f} min "
                         f"(prev={self.previous_cycle_seconds}s, curr={current_cycle_seconds}s)",
-                        DebugLevel.VERBOSE
+                        DebugLevel.VERBOSE,
                     )
 
         self.previous_cycle_seconds = current_cycle_seconds
@@ -558,8 +621,9 @@ class LastCycleConverter(DataConverter):
     Returns gated result - only updates when a cycle actually completes.
     """
 
-    def convert(self, data_store: DataStore, command: str, address: int,
-                tracker: 'CycleTracker') -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, address: int, tracker: "CycleTracker"
+    ) -> GatedResult:
         try:
             data_list = data_store.get(command, [])
             current_cycle_s = int(data_list[address])
@@ -572,7 +636,9 @@ class LastCycleConverter(DataConverter):
                 return (None, "cycle in progress")
 
         except (IndexError, TypeError) as e:
-            context.logger.log(f"LastCycleConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
+            context.logger.log(
+                f"LastCycleConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
+            )
             return (None, f"error: {type(e).__name__}")
 
 
@@ -588,7 +654,9 @@ class FreqHeadroomConverter(DataConverter):
     is meaningful as soon as the compressor is spinning.
     """
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], *args) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, indices: List[int], *args
+    ) -> GatedResult:
         try:
             calc = data_store.get(command, [])
             target_addr, actual_addr = indices
@@ -596,11 +664,10 @@ class FreqHeadroomConverter(DataConverter):
             if actual <= 0:
                 return (None, "idle (compressor off)")
             target = calc[target_addr]
-            return ({'sValue': str(int(round(target - actual)))}, None)
+            return ({"sValue": str(int(round(target - actual)))}, None)
         except (IndexError, TypeError) as e:
             context.logger.log(
-                f"FreqHeadroomConverter error: {type(e).__name__}: {e}",
-                DebugLevel.VERBOSE
+                f"FreqHeadroomConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
             )
             return (None, f"error: {type(e).__name__}")
 
@@ -619,7 +686,9 @@ class CompressionRatioConverter(SteadyStateGateMixin, DataConverter):
     loss, restriction). Gated to steady-state compressor operation.
     """
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], *args) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, indices: List[int], *args
+    ) -> GatedResult:
         gate_reason = self.check_steady_state(data_store)
         if gate_reason:
             return (None, gate_reason)
@@ -630,11 +699,10 @@ class CompressionRatioConverter(SteadyStateGateMixin, DataConverter):
             nd = float(calc[np_addr]) / 100 + ATMOSPHERIC_BAR
             if nd <= 0:
                 return (None, "ND<=0")
-            return ({'sValue': str(round(hd / nd, 2))}, None)
+            return ({"sValue": str(round(hd / nd, 2))}, None)
         except (IndexError, TypeError, ZeroDivisionError) as e:
             context.logger.log(
-                f"CompressionRatioConverter error: {type(e).__name__}: {e}",
-                DebugLevel.VERBOSE
+                f"CompressionRatioConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
             )
             return (None, f"error: {type(e).__name__}")
 
@@ -648,7 +716,9 @@ class DischargeHeadroomConverter(SteadyStateGateMixin, DataConverter):
     bypass, because hot-gas headroom is meaningless when the compressor is off.
     """
 
-    def convert(self, data_store: DataStore, command: str, indices: List[int], divider: float = 10) -> GatedResult:
+    def convert(
+        self, data_store: DataStore, command: str, indices: List[int], divider: float = 10
+    ) -> GatedResult:
         gate_reason = self.check_steady_state(data_store)
         if gate_reason:
             return (None, gate_reason)
@@ -657,11 +727,10 @@ class DischargeHeadroomConverter(SteadyStateGateMixin, DataConverter):
             setpoint_addr, sensor_addr = indices
             a = float(calc[setpoint_addr]) / divider
             b = float(calc[sensor_addr]) / divider
-            return ({'sValue': str(round(a - b, 1))}, None)
+            return ({"sValue": str(round(a - b, 1))}, None)
         except (IndexError, TypeError, ZeroDivisionError) as e:
             context.logger.log(
-                f"DischargeHeadroomConverter error: {type(e).__name__}: {e}",
-                DebugLevel.VERBOSE
+                f"DischargeHeadroomConverter error: {type(e).__name__}: {e}", DebugLevel.VERBOSE
             )
             return (None, f"error: {type(e).__name__}")
 
@@ -681,8 +750,8 @@ class WriteConverter(ABC):
 class CommandToNumberConverter(WriteConverter):
     """Converts On/Off command to number."""
 
-    def convert(self, Command: str = '', **kwargs) -> int:
-        return 1 if Command == 'On' else 0
+    def convert(self, Command: str = "", **kwargs) -> int:
+        return 1 if Command == "On" else 0
 
 
 class LevelWithDividerConverter(WriteConverter):

@@ -11,6 +11,7 @@ relies on that final fallback, so these tests lock in its behavior:
 All writes go through a mocked connection; no live Domoticz or heat pump is
 required and no real WRITE_PARAMS is ever sent.
 """
+
 from unittest.mock import MagicMock
 
 import pytest

@@ -6,7 +6,7 @@ Author: Rouzax, 2025 (Refactored)
     <description>
         <h2>Luxtronik Heat Pump Controller Plugin</h2><br/>
         <p>This plugin connects to Luxtronik-based heat pump controllers using socket communication.</p>
-        
+
         <h3>Features:</h3>
         <ul>
             <li>Real-time monitoring of heat pump parameters</li>
@@ -15,21 +15,21 @@ Author: Rouzax, 2025 (Refactored)
             <li>Configurable update intervals</li>
             <li>Multi-instance support for multiple heat pumps</li>
         </ul>
-        
+
         <h3>Configuration Notes:</h3>
         <ul>
             <li>Default port for Luxtronik is typically 8889</li>
             <li>Update interval is clamped to 10-60 seconds for stability</li>
             <li>Values greater than 30 seconds will trigger a Domoticz timeout warning, but the plugin will continue to function correctly</li>
         </ul>
-        
+
         <h3>Security Notes:</h3>
         <ul>
             <li>The Luxtronik protocol uses plain TCP without encryption (hardware limitation)</li>
             <li>Keep your heat pump on a trusted LAN/VLAN; do not expose to the internet</li>
             <li>Use a VPN if remote access is required</li>
         </ul>
-        
+
         <h3>COP Accuracy Note:</h3>
         <p>For accurate COP averages over time, enable: <b>Settings → Log History → 'Only add newly received values to the Log'</b></p>
         <p>When disabled, Domoticz fills in the last received value every 5 minutes even when the heat pump is idle, skewing COP averages.</p>
@@ -92,29 +92,44 @@ Author: Rouzax, 2025 (Refactored)
 </plugin>
 """
 
-import DomoticzEx as Domoticz
 import socket
 import struct
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import DomoticzEx as Domoticz
+
+from addresses import ConfigLimits, LuxtronikAddress, SocketCommand
 from context import DebugLevel
-from translations import Language, DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
-from addresses import LuxtronikAddress, SocketCommand, ConfigLimits
 from converters import (
-    DataStore,
+    AvailableWritesConverter,
+    BooleanSwitchConverter,
+    CapacityConverter,
+    CommandToNumberConverter,
+    CompressionRatioConverter,
+    COPCalculatorConverter,
+    CycleTracker,
     DataConverter,
-    FloatConverter, NumberConverter, SelectorSwitchConverter,
-    InstantPowerConverter, InstantPowerSplitConverter,
-    RuntimeHoursConverter, IntegerValueConverter, BooleanSwitchConverter,
-    TempDiffConverter, GatedFloatConverter, GatedTempDiffConverter,
-    TextStateConverter, COPCalculatorConverter, CapacityConverter,
-    LastCycleConverter, CycleTracker,
+    DataStore,
+    DischargeHeadroomConverter,
+    FloatConverter,
     FreqHeadroomConverter,
-    CompressionRatioConverter, DischargeHeadroomConverter,
-    WriteConverter, CommandToNumberConverter, LevelWithDividerConverter, AvailableWritesConverter,
+    GatedFloatConverter,
+    GatedTempDiffConverter,
+    InstantPowerConverter,
+    InstantPowerSplitConverter,
+    IntegerValueConverter,
+    LastCycleConverter,
+    LevelWithDividerConverter,
+    NumberConverter,
+    RuntimeHoursConverter,
+    SelectorSwitchConverter,
+    TempDiffConverter,
+    TextStateConverter,
+    WriteConverter,
 )
+from translations import DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES, Language
 
 
 # =============================================================================
@@ -122,19 +137,19 @@ from converters import (
 # =============================================================================
 class DebugLogger:
     """Handles all debug logging for the plugin.
-    
+
     BASIC level uses Domoticz.Status() for UI visibility.
     Other levels use Domoticz.Debug() for log file only.
     Errors always log via Domoticz.Error().
     """
-    
+
     def __init__(self, debug_level: DebugLevel = DebugLevel.NONE):
         self._level = debug_level
-    
+
     @property
     def level(self) -> DebugLevel:
         return self._level
-    
+
     @level.setter
     def level(self, value: int):
         # Handle -1 (ALL) specially since IntFlag doesn't handle negative values well
@@ -142,11 +157,11 @@ class DebugLogger:
             self._level = DebugLevel.ALL
         else:
             self._level = DebugLevel(value)
-    
+
     def is_all(self) -> bool:
         """Check if ALL debugging is enabled."""
         return self._level == DebugLevel.ALL or int(self._level) == -1
-    
+
     def _is_enabled(self, level: DebugLevel) -> bool:
         """Check if a specific level is enabled."""
         if self._level == DebugLevel.NONE:
@@ -154,16 +169,16 @@ class DebugLogger:
         if self.is_all():
             return True
         return bool(self._level & level)
-    
+
     def log(self, message: str, level: DebugLevel) -> None:
         """Log a debug message if the level is enabled.
-        
+
         BASIC level → Domoticz.Status() (visible in UI)
         Other levels → Domoticz.Debug() (log file only)
         """
         if not self._is_enabled(level):
             return
-        
+
         # BASIC uses Status() for UI visibility, others use Debug()
         if level == DebugLevel.BASIC:
             Domoticz.Status(message)
@@ -175,10 +190,10 @@ class DebugLogger:
                 DebugLevel.VERBOSE: "[VERBOSE]",
             }.get(level, "[DEBUG]")
             Domoticz.Debug(f"{prefix} {message}")
-    
+
     def error(self, message: str, exc: Exception = None) -> None:
         """Log an error message. Always logs regardless of level.
-        
+
         Args:
             message: The error message
             exc: Optional exception to include type information
@@ -187,7 +202,7 @@ class DebugLogger:
             Domoticz.Error(f"{message} ({type(exc).__name__}: {exc})")
         else:
             Domoticz.Error(message)
-    
+
     def warning(self, message: str) -> None:
         """Log a warning message. Always logs regardless of level."""
         Domoticz.Status(f"Warning: {message}")
@@ -213,25 +228,25 @@ class TranslationManager:
     # Maps current spec_id → old spec_id for devices that were renamed.
     # Used to detect old translated names so they can be auto-renamed.
     _RENAMED_SPECS = {
-        'condensing_temp': 'liquid_line_temp',        # 164: calc[233] is condensing temp (was mislabeled liquid line)
-        'compressor_heating_temp': 'discharge_temp',  # 162: calc[177] is compressor heating, not discharge
-        'condensing_supply_delta': 'condenser_approach',  # 172: signed ΔT, not an always-positive "approach"
+        "condensing_temp": "liquid_line_temp",  # 164: calc[233] is condensing temp (was mislabeled liquid line)
+        "compressor_heating_temp": "discharge_temp",  # 162: calc[177] is compressor heating, not discharge
+        "condensing_supply_delta": "condenser_approach",  # 172: signed ΔT, not an always-positive "approach"
     }
 
     LANGUAGE_MAP = {
-        '0': Language.ENGLISH,
-        '1': Language.POLISH,
-        '2': Language.DUTCH,
-        '3': Language.GERMAN,
-        '4': Language.FRENCH
+        "0": Language.ENGLISH,
+        "1": Language.POLISH,
+        "2": Language.DUTCH,
+        "3": Language.GERMAN,
+        "4": Language.FRENCH,
     }
-    
+
     def __init__(self):
         self._device_translations: Dict[str, Dict] = {}
         self._selector_options: Dict[str, Dict[Language, str]] = {}
         self._working_mode_statuses: Dict[str, Dict[Language, str]] = {}
         self._current_language = Language.ENGLISH
-    
+
     def set_language(self, language_code: str) -> None:
         """Set current language from plugin parameter."""
         if language_code not in self.LANGUAGE_MAP:
@@ -239,52 +254,50 @@ class TranslationManager:
             language = Language.ENGLISH
         else:
             language = self.LANGUAGE_MAP[language_code]
-        
+
         self._current_language = language
         _logger.log(f"Language set to: {language.name}", DebugLevel.BASIC)
-    
-    def load_translations(self, device_translations: Dict, 
-                          selector_options: Dict, 
-                          working_mode_statuses: Dict) -> None:
+
+    def load_translations(
+        self, device_translations: Dict, selector_options: Dict, working_mode_statuses: Dict
+    ) -> None:
         """Load translations from data dictionaries."""
         self._device_translations = device_translations
         self._selector_options = selector_options
         self._working_mode_statuses = working_mode_statuses
-    
+
     def get_device_name(self, spec_id: str) -> str:
         """Get device name for current language by spec_id."""
         if spec_id not in self._device_translations:
             return spec_id
-        
-        names = self._device_translations[spec_id].get('name', {})
-        return names.get(self._current_language, 
-                        names.get(Language.ENGLISH, spec_id))
-    
+
+        names = self._device_translations[spec_id].get("name", {})
+        return names.get(self._current_language, names.get(Language.ENGLISH, spec_id))
+
     def get_device_name_for_language(self, spec_id: str, language: Language) -> str:
         """Get device name for a specific language by spec_id."""
         if spec_id not in self._device_translations:
             return spec_id
-        
-        names = self._device_translations[spec_id].get('name', {})
+
+        names = self._device_translations[spec_id].get("name", {})
         return names.get(language, names.get(Language.ENGLISH, spec_id))
-    
+
     def get_device_description(self, spec_id: str) -> str:
         """Get device description for current language by spec_id."""
         if spec_id not in self._device_translations:
             return ""
-        
-        descs = self._device_translations[spec_id].get('description', {})
-        return descs.get(self._current_language, 
-                        descs.get(Language.ENGLISH, ""))
-    
+
+        descs = self._device_translations[spec_id].get("description", {})
+        return descs.get(self._current_language, descs.get(Language.ENGLISH, ""))
+
     def get_device_description_for_language(self, spec_id: str, language: Language) -> str:
         """Get device description for a specific language by spec_id."""
         if spec_id not in self._device_translations:
             return ""
-        
-        descs = self._device_translations[spec_id].get('description', {})
+
+        descs = self._device_translations[spec_id].get("description", {})
         return descs.get(language, descs.get(Language.ENGLISH, ""))
-    
+
     def is_known_device_name(self, name: str, spec_id: str) -> bool:
         """Check if name matches any known translation for the spec_id.
 
@@ -293,73 +306,71 @@ class TranslationManager:
         Also checks old spec_id from _RENAMED_SPECS for rename transitions.
         """
         if spec_id in self._device_translations:
-            names = self._device_translations[spec_id].get('name', {})
+            names = self._device_translations[spec_id].get("name", {})
             if name in names.values():
                 return True
 
         old_spec_id = self._RENAMED_SPECS.get(spec_id)
         if old_spec_id and old_spec_id in self._device_translations:
-            old_names = self._device_translations[old_spec_id].get('name', {})
+            old_names = self._device_translations[old_spec_id].get("name", {})
             if name in old_names.values():
                 return True
 
         return False
-    
+
     def is_known_description(self, description: str, spec_id: str) -> bool:
         """Check if description matches any known translation for spec_id.
 
         Also checks old spec_id from _RENAMED_SPECS for rename transitions.
         """
         if spec_id in self._device_translations:
-            descs = self._device_translations[spec_id].get('description', {})
+            descs = self._device_translations[spec_id].get("description", {})
             if description in descs.values():
                 return True
 
         old_spec_id = self._RENAMED_SPECS.get(spec_id)
         if old_spec_id and old_spec_id in self._device_translations:
-            old_descs = self._device_translations[old_spec_id].get('description', {})
+            old_descs = self._device_translations[old_spec_id].get("description", {})
             if description in old_descs.values():
                 return True
 
         return False
-    
+
     def get_selector_option(self, option_key: str) -> str:
         """Get selector option text for current language."""
         if option_key not in self._selector_options:
             return option_key
-        
+
         options = self._selector_options[option_key]
-        return options.get(self._current_language, 
-                          options.get(Language.ENGLISH, option_key))
-    
+        return options.get(self._current_language, options.get(Language.ENGLISH, option_key))
+
     def get_selector_option_for_language(self, option_key: str, language: Language) -> str:
         """Get selector option text for a specific language."""
         if option_key not in self._selector_options:
             return option_key
-        
+
         options = self._selector_options[option_key]
         return options.get(language, options.get(Language.ENGLISH, option_key))
-    
+
     def translate_selector_options(self, options: List[str]) -> str:
         """Translate selector switch options and join with pipes."""
-        return '|'.join(self.get_selector_option(opt) for opt in options)
-    
+        return "|".join(self.get_selector_option(opt) for opt in options)
+
     def is_known_selector_option(self, text: str, option_key: str) -> bool:
         """Check if text matches any known translation for selector option."""
         if option_key not in self._selector_options:
             return False
-        
+
         options = self._selector_options[option_key]
         return text in options.values()
-    
+
     def get_working_mode_status(self, status_key: str) -> str:
         """Get working mode status text for current language."""
         if status_key not in self._working_mode_statuses:
             return status_key
-        
+
         statuses = self._working_mode_statuses[status_key]
-        return statuses.get(self._current_language, 
-                          statuses.get(Language.ENGLISH, status_key))
+        return statuses.get(self._current_language, statuses.get(Language.ENGLISH, status_key))
 
 
 # Global translation manager
@@ -372,12 +383,13 @@ _translator = TranslationManager()
 @dataclass
 class Field:
     """Represents a writable field with allowed values."""
-    name: str = 'Unknown'
+
+    name: str = "Unknown"
     values: List[int] = field(default_factory=list)
-    
+
     def get_name(self) -> str:
         return self.name
-    
+
     def get_val(self) -> List[int]:
         return self.values
 
@@ -388,7 +400,7 @@ class Field:
 @dataclass
 class DeviceSpec:
     """Specification for creating a Domoticz device.
-    
+
     Attributes:
         unit_id: Stable, explicit Unit number (never changes even if list order changes)
         spec_id: Human-readable identifier used for debugging and translation lookup
@@ -400,6 +412,7 @@ class DeviceSpec:
         write_converter: Optional converter for writing data
         selector_options: Optional list of untranslated option keys for selector switches
     """
+
     unit_id: int
     spec_id: str  # Also serves as translation key
     command: str
@@ -416,32 +429,32 @@ class DeviceSpec:
 # =============================================================================
 class DeviceUpdateTracker:
     """Tracks device updates and determines when updates are needed."""
-    
+
     GRAPH_UPDATE_INTERVAL = 125  # ~2 minutes
-    
+
     GRAPHING_TYPES = {80, 242, 243}  # Temperature, Custom types that graph
     NON_GRAPHING_TYPES = {244}  # Switch types
-    
+
     def __init__(self):
         self._last_update_times: Dict[int, float] = {}
         self._device_type_cache: Dict[int, bool] = {}
-    
+
     def _is_graphing_device(self, unit) -> bool:
         """Determine if a unit produces graphs."""
         device_id = unit.ID
-        
+
         if device_id in self._device_type_cache:
             return self._device_type_cache[device_id]
-        
+
         # Text devices (Type 243, SubType 19) don't graph
-        if hasattr(unit, 'SubType') and unit.Type == 243 and unit.SubType == 19:
+        if hasattr(unit, "SubType") and unit.Type == 243 and unit.SubType == 19:
             self._device_type_cache[device_id] = False
             return False
-        
+
         is_graphing = unit.Type in self.GRAPHING_TYPES
         self._device_type_cache[device_id] = is_graphing
         return is_graphing
-    
+
     def _normalize_value(self, value_str: str) -> str:
         """Normalize a value for comparison.
 
@@ -452,8 +465,8 @@ class DeviceUpdateTracker:
             return ""
 
         value_str = value_str.strip()
-        if ';' in value_str:
-            value_str = value_str.split(';')[0].strip()
+        if ";" in value_str:
+            value_str = value_str.split(";")[0].strip()
 
         try:
             float_value = float(value_str)
@@ -464,36 +477,36 @@ class DeviceUpdateTracker:
             return f"{float_value:.2f}"
         except ValueError:
             return value_str.lower()
-    
+
     def needs_update(self, unit, new_values: Dict) -> Tuple[bool, str, str]:
         """Determine if a unit needs updating."""
         current_time = time.monotonic()
         device_id = unit.ID
         is_graphing = self._is_graphing_device(unit)
-        
+
         # Compare values
         current_nvalue = unit.nValue
         current_svalue = str(unit.sValue)
-        
+
         values_changed = False
         diff_message = ""
-        
-        if 'nValue' in new_values and new_values['nValue'] != current_nvalue:
+
+        if "nValue" in new_values and new_values["nValue"] != current_nvalue:
             values_changed = True
             diff_message += f"nValue: {current_nvalue} -> {new_values['nValue']}; "
-        
-        if 'sValue' in new_values:
+
+        if "sValue" in new_values:
             norm_current = self._normalize_value(current_svalue)
-            norm_new = self._normalize_value(new_values['sValue'])
+            norm_new = self._normalize_value(new_values["sValue"])
             if norm_current != norm_new:
                 values_changed = True
                 diff_message += f"sValue: {current_svalue} -> {new_values['sValue']}"
-        
+
         if values_changed:
             if is_graphing:
                 self._last_update_times[device_id] = current_time
             return True, "Values changed", diff_message
-        
+
         # Periodic update for graphing devices
         if is_graphing:
             last_update = self._last_update_times.get(device_id, 0)
@@ -504,7 +517,7 @@ class DeviceUpdateTracker:
                 value_info = f"sValue: {new_values.get('sValue', current_svalue)}"
                 return True, "Interval update", value_info
             return False, f"Next update in {int(self.GRAPH_UPDATE_INTERVAL - time_since)}s", ""
-        
+
         return False, "No changes", ""
 
 
@@ -513,41 +526,41 @@ class DeviceUpdateTracker:
 # =============================================================================
 class ConnectionManager:
     """Manages socket connections to the Luxtronik controller.
-    
+
     SECURITY NOTE: The Luxtronik protocol uses plain TCP without encryption
     or authentication. This is a hardware limitation. Ensure your heat pump
     is on a trusted network and not exposed to the internet.
-    
+
     SAFETY: This class includes protection against unintended writes.
     Write operations require explicit validation before sending.
     """
-    
+
     TIMEOUT = 5
     MAX_ATTEMPTS = 2  # 1 initial attempt + 1 retry
     MAX_ARRAY_LENGTH = 2000  # Sanity limit for protocol response arrays
-    
+
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
         self._socket: Optional[socket.socket] = None
         self._write_enabled = False  # Write protection flag
         self._allowed_write_addresses: set = set()  # Addresses that can be written
-    
+
     def enable_writes(self, allowed_addresses: List[int]) -> None:
         """Enable write operations for specific addresses only.
-        
+
         This must be called during plugin initialization to allow any writes.
         """
         self._allowed_write_addresses = set(allowed_addresses)
         self._write_enabled = True
         _logger.log(f"Writes enabled for addresses: {allowed_addresses}", DebugLevel.BASIC)
-    
+
     def disable_writes(self) -> None:
         """Disable all write operations (safety lockout)."""
         self._write_enabled = False
         self._allowed_write_addresses.clear()
         _logger.log("Writes disabled", DebugLevel.BASIC)
-    
+
     def connect(self) -> bool:
         """Establish connection to the controller."""
         try:
@@ -564,7 +577,7 @@ class ConnectionManager:
             _logger.error(f"Unexpected connection error to {self.host}:{self.port}", exc=e)
             self.close()
             return False
-    
+
     def close(self) -> None:
         """Close the connection."""
         if self._socket:
@@ -573,35 +586,37 @@ class ConnectionManager:
             except Exception:
                 pass
             self._socket = None
-    
+
     def _recv_exact(self, num_bytes: int) -> bytes:
         """Receive exactly num_bytes from the socket.
-        
+
         TCP does not guarantee that recv() returns all requested bytes in a
         single call. This method loops until the full payload is received,
         preventing silent data corruption from partial reads.
-        
+
         Raises:
             socket.error: If the connection is closed before all bytes arrive
         """
-        data = b''
+        data = b""
         while len(data) < num_bytes:
             chunk = self._socket.recv(num_bytes - len(data))
             if not chunk:
                 raise socket.error("Connection closed during receive")
             data += chunk
         return data
-    
-    def send_command(self, command: int, address: int = 0, value: int = 0) -> Optional[Tuple[int, int, int, List[int]]]:
+
+    def send_command(
+        self, command: int, address: int = 0, value: int = 0
+    ) -> Optional[Tuple[int, int, int, List[int]]]:
         """Send a command and receive response.
-        
+
         SAFETY: Write commands (WRITE_PARAMS) are blocked unless:
         1. Writes are enabled via enable_writes()
         2. The address is in the allowed list
         """
         if not self._socket:
             return None
-        
+
         # SAFETY CHECK: Block unauthorized write attempts
         if command == SocketCommand.WRITE_PARAMS:
             if not self._write_enabled:
@@ -611,51 +626,57 @@ class ConnectionManager:
                 _logger.error(f"WRITE BLOCKED: Address {address} not in allowed list")
                 return None
             _logger.log(f"WRITE AUTHORIZED: address={address}, value={value}", DebugLevel.BASIC)
-        
+
         try:
             # Send command and address
-            self._socket.send(struct.pack('!i', command))
-            self._socket.send(struct.pack('!i', address))
-            
+            self._socket.send(struct.pack("!i", command))
+            self._socket.send(struct.pack("!i", address))
+
             # Send value for write commands
             if command == SocketCommand.WRITE_PARAMS:
-                self._socket.send(struct.pack('!i', value))
-            
+                self._socket.send(struct.pack("!i", value))
+
             # Verify command echo
-            received = struct.unpack('!i', self._recv_exact(4))[0]
+            received = struct.unpack("!i", self._recv_exact(4))[0]
             if received != command:
                 raise Exception(f"Command verification failed: sent {command}, received {received}")
-            
+
             # Process response
             stat = 0
             length = 0
             data_list = []
-            
+
             if command == SocketCommand.READ_PARAMS:
-                length = struct.unpack('!i', self._recv_exact(4))[0]
+                length = struct.unpack("!i", self._recv_exact(4))[0]
             elif command == SocketCommand.READ_CALCUL:
-                stat = struct.unpack('!i', self._recv_exact(4))[0]
-                length = struct.unpack('!i', self._recv_exact(4))[0]
-            
+                stat = struct.unpack("!i", self._recv_exact(4))[0]
+                length = struct.unpack("!i", self._recv_exact(4))[0]
+
             if length > self.MAX_ARRAY_LENGTH:
-                raise Exception(f"Protocol response length {length} exceeds maximum {self.MAX_ARRAY_LENGTH}")
+                raise Exception(
+                    f"Protocol response length {length} exceeds maximum {self.MAX_ARRAY_LENGTH}"
+                )
 
             if length > 0:
-                data_list = [struct.unpack('!i', self._recv_exact(4))[0] for _ in range(length)]
-            
-            _logger.log(f"{SocketCommand.get_name(command)}: Received {length} values", DebugLevel.COMMS)
+                data_list = [struct.unpack("!i", self._recv_exact(4))[0] for _ in range(length)]
+
+            _logger.log(
+                f"{SocketCommand.get_name(command)}: Received {length} values", DebugLevel.COMMS
+            )
             return command, stat, length, data_list
-            
+
         except socket.error as e:
-            _logger.error(f"Socket error during command", exc=e)
+            _logger.error("Socket error during command", exc=e)
             return None
         except Exception as e:
-            _logger.error(f"Command failed", exc=e)
+            _logger.error("Command failed", exc=e)
             return None
-    
-    def execute_with_retry(self, command: int, address: int = 0, value: int = 0) -> Tuple[int, int, int, List[int]]:
+
+    def execute_with_retry(
+        self, command: int, address: int = 0, value: int = 0
+    ) -> Tuple[int, int, int, List[int]]:
         """Execute a single command with retry logic.
-        
+
         Opens a connection, sends one command, then closes. Used for
         single-command operations like writes.
         """
@@ -667,23 +688,27 @@ class ConnectionManager:
                         return result
             except socket.error as e:
                 if attempt == 0:
-                    _logger.log(f"Socket error (retrying): {type(e).__name__}: {e}", DebugLevel.COMMS)
+                    _logger.log(
+                        f"Socket error (retrying): {type(e).__name__}: {e}", DebugLevel.COMMS
+                    )
             finally:
                 self.close()
-        
+
         _logger.error(f"Command failed after {self.MAX_ATTEMPTS} attempts")
         return command, 0, 0, []
-    
-    def execute_batch_with_retry(self, commands: List[Tuple[int, int, int]]) -> Dict[int, Tuple[int, int, int, List[int]]]:
+
+    def execute_batch_with_retry(
+        self, commands: List[Tuple[int, int, int]]
+    ) -> Dict[int, Tuple[int, int, int, List[int]]]:
         """Execute multiple commands on a single connection with retry logic.
-        
+
         The Luxtronik controller supports sequential commands on one TCP
         connection. This avoids redundant TCP handshakes when multiple
         read commands are needed (e.g., READ_CALCUL + READ_PARAMS).
-        
+
         Args:
             commands: List of (command, address, value) tuples to execute.
-            
+
         Returns:
             Dict mapping command code to its (command, stat, length, data_list)
             result. Failed commands are omitted from the dict.
@@ -692,10 +717,10 @@ class ConnectionManager:
             try:
                 if not self.connect():
                     continue
-                
+
                 results: Dict[int, Tuple[int, int, int, List[int]]] = {}
                 all_ok = True
-                
+
                 for command, address, value in commands:
                     result = self.send_command(command, address, value)
                     if result:
@@ -703,16 +728,19 @@ class ConnectionManager:
                     else:
                         all_ok = False
                         break  # Connection likely broken, retry from scratch
-                
+
                 if all_ok:
                     return results
-                    
+
             except socket.error as e:
                 if attempt == 0:
-                    _logger.log(f"Socket error during batch (retrying): {type(e).__name__}: {e}", DebugLevel.COMMS)
+                    _logger.log(
+                        f"Socket error during batch (retrying): {type(e).__name__}: {e}",
+                        DebugLevel.COMMS,
+                    )
             finally:
                 self.close()
-        
+
         _logger.error(f"Batch command failed after {self.MAX_ATTEMPTS} attempts")
         return {}
 
@@ -728,8 +756,8 @@ class ConnectionManager:
 # 1. Domoticz runs plugins single-threaded per hardware instance
 # 2. The globals are only written during onStart() and cleared during onStop()
 # 3. Each hardware instance has its own Python interpreter context
-_unit_specs: Dict[Tuple[str, int], 'DeviceSpec'] = {}  # (DeviceID, Unit) -> Spec
-_plugin_ref: Optional['LuxtronikPlugin'] = None  # Reference to plugin instance
+_unit_specs: Dict[Tuple[str, int], "DeviceSpec"] = {}  # (DeviceID, Unit) -> Spec
+_plugin_ref: Optional["LuxtronikPlugin"] = None  # Reference to plugin instance
 
 
 # =============================================================================
@@ -737,7 +765,7 @@ _plugin_ref: Optional['LuxtronikPlugin'] = None  # Reference to plugin instance
 # =============================================================================
 class DeviceFactory:
     """Factory for creating device specifications."""
-    
+
     # Converter instances (flyweight pattern)
     _float_converter = FloatConverter()
     _gated_float_converter = GatedFloatConverter()
@@ -758,11 +786,17 @@ class DeviceFactory:
     _freq_headroom_converter = FreqHeadroomConverter()
     _compression_ratio_converter = CompressionRatioConverter()
     _discharge_headroom_converter = DischargeHeadroomConverter()
-    
+
     @classmethod
-    def create_temperature_device(cls, unit_id: int, spec_id: str, command: str, 
-                                   address: int,
-                                   divider: float = 10, used: int = 1) -> DeviceSpec:
+    def create_temperature_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        divider: float = 10,
+        used: int = 1,
+    ) -> DeviceSpec:
         """Create a temperature sensor device specification."""
         return DeviceSpec(
             unit_id=unit_id,
@@ -771,17 +805,25 @@ class DeviceFactory:
             address=address,
             read_converter=cls._float_converter,
             read_args=(divider,),
-            device_params={'TypeName': 'Temperature', 'Used': used}
+            device_params={"TypeName": "Temperature", "Used": used},
         )
-    
+
     @classmethod
-    def create_custom_device(cls, unit_id: int, spec_id: str, command: str, 
-                             address: int,
-                             unit: str, divider: float = 1, used: int = 1,
-                             gated: bool = False, precision: str = '1',
-                             image: Optional[int] = None) -> DeviceSpec:
+    def create_custom_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        unit: str,
+        divider: float = 1,
+        used: int = 1,
+        gated: bool = False,
+        precision: str = "1",
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a custom sensor device specification.
-        
+
         Args:
             unit_id: Domoticz unit ID
             spec_id: Unique specification identifier (also used for translation)
@@ -795,13 +837,9 @@ class DeviceFactory:
             image: Optional icon image number
         """
         converter = cls._gated_float_converter if gated else cls._float_converter
-        params = {
-            'TypeName': 'Custom',
-            'Used': used,
-            'Options': {'Custom': f'{precision};{unit}'}
-        }
+        params = {"TypeName": "Custom", "Used": used, "Options": {"Custom": f"{precision};{unit}"}}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -809,15 +847,23 @@ class DeviceFactory:
             address=address,
             read_converter=converter,
             read_args=(divider,),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_setpoint_device(cls, unit_id: int, spec_id: str, command: str, 
-                                address: int,
-                                divider: float = 10, write_divider: float = 0.1,
-                                min_val: str = "-5", max_val: str = "5",
-                                step: str = "0.5", used: int = 0) -> DeviceSpec:
+    def create_setpoint_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        divider: float = 10,
+        write_divider: float = 0.1,
+        min_val: str = "-5",
+        max_val: str = "5",
+        step: str = "0.5",
+        used: int = 0,
+    ) -> DeviceSpec:
         """Create a setpoint device specification."""
         return DeviceSpec(
             unit_id=unit_id,
@@ -827,27 +873,34 @@ class DeviceFactory:
             read_converter=cls._float_converter,
             read_args=(divider,),
             device_params={
-                'Type': 242,
-                'Subtype': 1,
-                'Used': used,
-                'Options': {
-                    'ValueStep': step,
-                    'ValueMin': min_val,
-                    'ValueMax': max_val,
-                    'ValueUnit': '°C'
-                }
+                "Type": 242,
+                "Subtype": 1,
+                "Used": used,
+                "Options": {
+                    "ValueStep": step,
+                    "ValueMin": min_val,
+                    "ValueMax": max_val,
+                    "ValueUnit": "°C",
+                },
             },
-            write_converter=LevelWithDividerConverter(write_divider)
+            write_converter=LevelWithDividerConverter(write_divider),
         )
-    
+
     @classmethod
-    def create_selector_device(cls, unit_id: int, spec_id: str, command: str, 
-                               address: int,
-                               options: List[str], mapping: List[int],
-                               writes_idx: int, used: int = 1,
-                               image: int = 15) -> DeviceSpec:
+    def create_selector_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        options: List[str],
+        mapping: List[int],
+        writes_idx: int,
+        used: int = 1,
+        image: int = 15,
+    ) -> DeviceSpec:
         """Create a selector switch device specification.
-        
+
         Args:
             image: Icon image number (default 15 = heat pump). Common options:
                    15 = heat pump, 16 = fire, 7 = fan, 9 = door, etc.
@@ -860,26 +913,26 @@ class DeviceFactory:
             read_converter=cls._selector_converter,
             read_args=(mapping,),
             device_params={
-                'TypeName': 'Selector Switch',
-                'Image': image,
-                'Used': used,
-                'Options': {
-                    'LevelActions': '|' * len(options),
-                    'LevelNames': _translator.translate_selector_options(options),
-                    'LevelOffHidden': 'false',
-                    'SelectorStyle': '1'
-                }
+                "TypeName": "Selector Switch",
+                "Image": image,
+                "Used": used,
+                "Options": {
+                    "LevelActions": "|" * len(options),
+                    "LevelNames": _translator.translate_selector_options(options),
+                    "LevelOffHidden": "false",
+                    "SelectorStyle": "1",
+                },
             },
             write_converter=AvailableWritesConverter(10, writes_idx),
-            selector_options=options  # Store for language change updates
+            selector_options=options,  # Store for language change updates
         )
-    
+
     @classmethod
-    def create_switch_device(cls, unit_id: int, spec_id: str, command: str, 
-                              address: int,
-                              used: int = 1, image: int = 16) -> DeviceSpec:
+    def create_switch_device(
+        cls, unit_id: int, spec_id: str, command: str, address: int, used: int = 1, image: int = 16
+    ) -> DeviceSpec:
         """Create a switch device specification.
-        
+
         Args:
             image: Icon image number (default 16 = fire). Common options:
                    15 = heat pump, 16 = fire, 7 = fan, 9 = door, etc.
@@ -891,32 +944,34 @@ class DeviceFactory:
             address=address,
             read_converter=cls._number_converter,
             read_args=(),
-            device_params={'TypeName': 'Switch', 'Image': image, 'Used': used},
-            write_converter=cls._command_to_number
+            device_params={"TypeName": "Switch", "Image": image, "Used": used},
+            write_converter=cls._command_to_number,
         )
-    
+
     @classmethod
-    def create_power_device(cls, unit_id: int, spec_id: str, command: str, 
-                            address: int,
-                            used: int = 1, generated: bool = False,
-                            image: Optional[int] = None) -> DeviceSpec:
+    def create_power_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        used: int = 1,
+        generated: bool = False,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a power meter device specification.
-        
+
         Args:
             generated: If True, sets Switchtype=4 for energy export display
             image: Optional icon image number. If None, defaults to 15 for generated meters
         """
-        params = {
-            'TypeName': 'kWh',
-            'Used': used,
-            'Options': {'EnergyMeterMode': '1'}
-        }
+        params = {"TypeName": "kWh", "Used": used, "Options": {"EnergyMeterMode": "1"}}
         if generated:
-            params['Switchtype'] = 4
-            params['Image'] = image if image is not None else 15
+            params["Switchtype"] = 4
+            params["Image"] = image if image is not None else 15
         elif image is not None:
-            params['Image'] = image
-        
+            params["Image"] = image
+
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -924,32 +979,35 @@ class DeviceFactory:
             address=address,
             read_converter=cls._instant_power_converter,
             read_args=(),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_split_power_device(cls, unit_id: int, spec_id: str, command: str, 
-                                  address: int,
-                                  state_idx: int, valid_states: List[int],
-                                  used: int = 1, generated: bool = False,
-                                  image: Optional[int] = None) -> DeviceSpec:
+    def create_split_power_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        state_idx: int,
+        valid_states: List[int],
+        used: int = 1,
+        generated: bool = False,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a split power meter device specification.
-        
+
         Args:
             generated: If True, sets Switchtype=4 for energy export display
             image: Optional icon image number. If None, defaults to 15 for generated meters
         """
-        params = {
-            'TypeName': 'kWh',
-            'Used': used,
-            'Options': {'EnergyMeterMode': '1'}
-        }
+        params = {"TypeName": "kWh", "Used": used, "Options": {"EnergyMeterMode": "1"}}
         if generated:
-            params['Switchtype'] = 4
-            params['Image'] = image if image is not None else 15
+            params["Switchtype"] = 4
+            params["Image"] = image if image is not None else 15
         elif image is not None:
-            params['Image'] = image
-        
+            params["Image"] = image
+
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -957,16 +1015,22 @@ class DeviceFactory:
             address=address,
             read_converter=cls._instant_power_split_converter,
             read_args=([state_idx, valid_states],),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_cop_device(cls, unit_id: int, spec_id: str, command: str, 
-                          heat_idx: int, power_idx: int,
-                          used: int = 1,
-                          allowed_modes: Optional[List[int]] = None) -> DeviceSpec:
+    def create_cop_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        heat_idx: int,
+        power_idx: int,
+        used: int = 1,
+        allowed_modes: Optional[List[int]] = None,
+    ) -> DeviceSpec:
         """Create a COP calculator device specification.
-        
+
         Args:
             unit_id: Domoticz unit ID
             spec_id: Unique specification identifier (also used for translation)
@@ -982,7 +1046,7 @@ class DeviceFactory:
         config = [heat_idx, power_idx]
         if allowed_modes is not None:
             config.append(allowed_modes)
-        
+
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -990,26 +1054,29 @@ class DeviceFactory:
             address=heat_idx,  # Primary address for lookup
             read_converter=cls._cop_converter,
             read_args=(config,),
-            device_params={
-                'TypeName': 'Custom',
-                'Used': used,
-                'Options': {'Custom': '1;COP'}
-            }
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;COP"}},
         )
-    
+
     @classmethod
-    def create_text_device(cls, unit_id: int, spec_id: str, command: str, 
-                           address: int,
-                           power_idx: int, power_threshold: float,
-                           used: int = 1, image: Optional[int] = None) -> DeviceSpec:
+    def create_text_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        power_idx: int,
+        power_threshold: float,
+        used: int = 1,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a text status device specification.
-        
+
         Args:
             image: Optional icon image number
         """
-        params = {'TypeName': 'Text', 'Used': used}
+        params = {"TypeName": "Text", "Used": used}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -1017,13 +1084,13 @@ class DeviceFactory:
             address=address,
             read_converter=cls._text_state_converter,
             read_args=([power_idx, power_threshold],),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_percentage_device(cls, unit_id: int, spec_id: str, command: str, 
-                                 address: int,
-                                 used: int = 1) -> DeviceSpec:
+    def create_percentage_device(
+        cls, unit_id: int, spec_id: str, command: str, address: int, used: int = 1
+    ) -> DeviceSpec:
         """Create a percentage device specification."""
         return DeviceSpec(
             unit_id=unit_id,
@@ -1032,16 +1099,22 @@ class DeviceFactory:
             address=address,
             read_converter=cls._float_converter,
             read_args=(1,),
-            device_params={'TypeName': 'Percentage', 'Used': used}
+            device_params={"TypeName": "Percentage", "Used": used},
         )
-    
+
     @classmethod
-    def create_temp_diff_device(cls, unit_id: int, spec_id: str, command: str, 
-                                indices: List[int],
-                                divider: float = 10, used: int = 1,
-                                gated: bool = False) -> DeviceSpec:
+    def create_temp_diff_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        indices: List[int],
+        divider: float = 10,
+        used: int = 1,
+        gated: bool = False,
+    ) -> DeviceSpec:
         """Create a temperature difference device specification.
-        
+
         Args:
             unit_id: Domoticz unit ID
             spec_id: Unique specification identifier (also used for translation)
@@ -1059,32 +1132,30 @@ class DeviceFactory:
             address=indices,
             read_converter=converter,
             read_args=(divider,),
-            device_params={
-                'TypeName': 'Custom',
-                'Used': used,
-                'Options': {'Custom': '1;K'}
-            }
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;K"}},
         )
-    
+
     @classmethod
-    def create_runtime_device(cls, unit_id: int, spec_id: str, command: str,
-                              address: int, used: int = 1,
-                              image: Optional[int] = None) -> DeviceSpec:
+    def create_runtime_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        used: int = 1,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a runtime hours device specification.
-        
+
         Converts seconds from controller to hours for display.
         Used for compressor lifetime runtime tracking.
-        
+
         Args:
             image: Optional icon image number
         """
-        params = {
-            'TypeName': 'Custom',
-            'Used': used,
-            'Options': {'Custom': '1;h'}
-        }
+        params = {"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;h"}}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -1092,27 +1163,30 @@ class DeviceFactory:
             address=address,
             read_converter=cls._runtime_hours_converter,
             read_args=(),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_counter_device(cls, unit_id: int, spec_id: str, command: str,
-                              address: int, unit_label: str = 'count',
-                              used: int = 1, image: Optional[int] = None) -> DeviceSpec:
+    def create_counter_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        unit_label: str = "count",
+        used: int = 1,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a counter device specification.
-        
+
         Displays integer counts like compressor starts.
-        
+
         Args:
             image: Optional icon image number
         """
-        params = {
-            'TypeName': 'Custom',
-            'Used': used,
-            'Options': {'Custom': f'1;{unit_label}'}
-        }
+        params = {"TypeName": "Custom", "Used": used, "Options": {"Custom": f"1;{unit_label}"}}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -1120,15 +1194,15 @@ class DeviceFactory:
             address=address,
             read_converter=cls._integer_value_converter,
             read_args=(),
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_capacity_device(cls, unit_id: int, spec_id: str, command: str,
-                               actual_idx: int, max_idx: int,
-                               used: int = 1) -> DeviceSpec:
+    def create_capacity_device(
+        cls, unit_id: int, spec_id: str, command: str, actual_idx: int, max_idx: int, used: int = 1
+    ) -> DeviceSpec:
         """Create a capacity utilization device specification.
-        
+
         Calculates percentage from actual/max compressor frequency.
         Gated to only report during steady-state operation.
         """
@@ -1139,34 +1213,32 @@ class DeviceFactory:
             address=actual_idx,  # Primary address for lookup
             read_converter=cls._capacity_converter,
             read_args=([actual_idx, max_idx],),
-            device_params={
-                'TypeName': 'Custom',
-                'Used': used,
-                'Options': {'Custom': '1;%'}
-            }
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;%"}},
         )
-    
+
     @classmethod
-    def create_last_cycle_device(cls, unit_id: int, spec_id: str, command: str,
-                                 address: int, used: int = 1,
-                                 image: Optional[int] = None) -> DeviceSpec:
+    def create_last_cycle_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        used: int = 1,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a last cycle duration device specification.
-        
+
         Tracks cycle completions and displays duration in minutes.
         Requires a CycleTracker instance to be passed during updates.
         Note: The tracker is passed in the read_args and must be set up
         by the plugin after initialization.
-        
+
         Args:
             image: Optional icon image number
         """
-        params = {
-            'TypeName': 'Custom',
-            'Used': used,
-            'Options': {'Custom': '1;min'}
-        }
+        params = {"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;min"}}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -1174,29 +1246,30 @@ class DeviceFactory:
             address=address,
             read_converter=cls._last_cycle_converter,
             read_args=(None,),  # Placeholder - tracker set during plugin init
-            device_params=params
+            device_params=params,
         )
-    
+
     @classmethod
-    def create_status_switch_device(cls, unit_id: int, spec_id: str, command: str,
-                                    address: int, used: int = 1,
-                                    image: Optional[int] = None) -> DeviceSpec:
+    def create_status_switch_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        address: int,
+        used: int = 1,
+        image: Optional[int] = None,
+    ) -> DeviceSpec:
         """Create a read-only status switch device specification.
-        
+
         Shows on/off status based on controller flag without write capability.
         Used for status indicators like cooling_permitted.
-        
+
         Args:
             image: Optional icon image number
         """
-        params = {
-            'Type': 244,
-            'Subtype': 73,
-            'Switchtype': 0,
-            'Used': used
-        }
+        params = {"Type": 244, "Subtype": 73, "Switchtype": 0, "Used": used}
         if image is not None:
-            params['Image'] = image
+            params["Image"] = image
         return DeviceSpec(
             unit_id=unit_id,
             spec_id=spec_id,
@@ -1204,13 +1277,20 @@ class DeviceFactory:
             address=address,
             read_converter=cls._boolean_switch_converter,
             read_args=(),
-            device_params=params
+            device_params=params,
             # No write_converter - this is read-only
         )
 
     @classmethod
-    def create_freq_headroom_device(cls, unit_id: int, spec_id: str, command: str,
-                                    target_addr: int, actual_addr: int, used: int = 1) -> DeviceSpec:
+    def create_freq_headroom_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        target_addr: int,
+        actual_addr: int,
+        used: int = 1,
+    ) -> DeviceSpec:
         """Create a frequency headroom device (target minus actual compressor frequency).
 
         Uses FreqHeadroomConverter: target_addr - actual_addr in Hz.
@@ -1228,12 +1308,13 @@ class DeviceFactory:
             address=[target_addr, actual_addr],
             read_converter=cls._freq_headroom_converter,
             read_args=(),
-            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;Hz'}}
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;Hz"}},
         )
 
     @classmethod
-    def create_compression_ratio_device(cls, unit_id: int, spec_id: str, command: str,
-                                        hp_addr: int, np_addr: int, used: int = 1) -> DeviceSpec:
+    def create_compression_ratio_device(
+        cls, unit_id: int, spec_id: str, command: str, hp_addr: int, np_addr: int, used: int = 1
+    ) -> DeviceSpec:
         """Create a compression ratio device (HD / ND on absolute pressures).
 
         Uses CompressionRatioConverter: (hp_addr/100 + atm) / (np_addr/100 + atm).
@@ -1251,12 +1332,19 @@ class DeviceFactory:
             address=[hp_addr, np_addr],
             read_converter=cls._compression_ratio_converter,
             read_args=(),
-            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;'}}
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;"}},
         )
 
     @classmethod
-    def create_discharge_headroom_device(cls, unit_id: int, spec_id: str, command: str,
-                                         setpoint_addr: int, sensor_addr: int, used: int = 1) -> DeviceSpec:
+    def create_discharge_headroom_device(
+        cls,
+        unit_id: int,
+        spec_id: str,
+        command: str,
+        setpoint_addr: int,
+        sensor_addr: int,
+        used: int = 1,
+    ) -> DeviceSpec:
         """Create a discharge headroom device (hot-gas trip setpoint minus hot-gas temp).
 
         Uses DischargeHeadroomConverter: setpoint_addr/10 - sensor_addr/10 (K).
@@ -1274,7 +1362,7 @@ class DeviceFactory:
             address=[setpoint_addr, sensor_addr],
             read_converter=cls._discharge_headroom_converter,
             read_args=(10,),
-            device_params={'TypeName': 'Custom', 'Used': used, 'Options': {'Custom': '1;K'}}
+            device_params={"TypeName": "Custom", "Used": used, "Options": {"Custom": "1;K"}},
         )
 
 
@@ -1283,7 +1371,7 @@ class DeviceFactory:
 # =============================================================================
 class LuxtronikPlugin:
     """Main plugin class orchestrating all components."""
-    
+
     def __init__(self):
         self.connection: Optional[ConnectionManager] = None
         self.update_tracker = DeviceUpdateTracker()
@@ -1291,556 +1379,684 @@ class LuxtronikPlugin:
         self.available_writes: Dict[int, Field] = {}
         self._device_specs: Dict[int, DeviceSpec] = {}  # Unit ID -> Spec
         self._command_specs: Dict[str, Dict[int, DeviceSpec]] = {
-            'READ_CALCUL': {},
-            'READ_PARAMS': {},
+            "READ_CALCUL": {},
+            "READ_PARAMS": {},
         }
         self._device_id: str = ""  # Will be set during onStart
         self._pump_compensation_enabled: bool = False
         self._pump_power_ranges: Optional[Dict[str, float]] = None
-    
+
     def _get_device_id(self) -> str:
         """Generate stable DeviceID based on HardwareID.
-        
+
         HardwareID is assigned by Domoticz when hardware is created and never
         changes, even if the hardware is renamed or IP address changes.
         This ensures device stability across configuration changes.
         """
-        hw_id = Parameters.get('HardwareID', '0')
+        hw_id = Parameters.get("HardwareID", "0")
         return f"luxtronikex_hw{hw_id}"
-    
+
     def _init_available_writes(self) -> None:
         """Initialize available write fields."""
         self.available_writes = {
             -1: Field(),
-            LuxtronikAddress.TEMP_OFFSET: Field(_translator.get_device_name('temp_offset'), list(range(-50, 51, 5))),
-            LuxtronikAddress.HEATING_MODE: Field(_translator.get_device_name('heating_mode'), [0, 1, 2, 3, 4]),
-            LuxtronikAddress.HOT_WATER_MODE: Field(_translator.get_device_name('hot_water_mode'), [0, 1, 2, 3, 4]),
-            LuxtronikAddress.DHW_TEMP_TARGET: Field(_translator.get_device_name('dhw_temp_target'), list(range(300, 651, 5))),
-            LuxtronikAddress.COOLING_ENABLED: Field(_translator.get_device_name('cooling_enabled'), [0, 1]),
-            LuxtronikAddress.DHW_POWER_MODE: Field(_translator.get_device_name('dhw_power_mode'), [0, 1]),
-            LuxtronikAddress.ROOM_TEMP_SETPOINT: Field(_translator.get_device_name('room_temp_setpoint'), list(range(150, 301, 5)))
+            LuxtronikAddress.TEMP_OFFSET: Field(
+                _translator.get_device_name("temp_offset"), list(range(-50, 51, 5))
+            ),
+            LuxtronikAddress.HEATING_MODE: Field(
+                _translator.get_device_name("heating_mode"), [0, 1, 2, 3, 4]
+            ),
+            LuxtronikAddress.HOT_WATER_MODE: Field(
+                _translator.get_device_name("hot_water_mode"), [0, 1, 2, 3, 4]
+            ),
+            LuxtronikAddress.DHW_TEMP_TARGET: Field(
+                _translator.get_device_name("dhw_temp_target"), list(range(300, 651, 5))
+            ),
+            LuxtronikAddress.COOLING_ENABLED: Field(
+                _translator.get_device_name("cooling_enabled"), [0, 1]
+            ),
+            LuxtronikAddress.DHW_POWER_MODE: Field(
+                _translator.get_device_name("dhw_power_mode"), [0, 1]
+            ),
+            LuxtronikAddress.ROOM_TEMP_SETPOINT: Field(
+                _translator.get_device_name("room_temp_setpoint"), list(range(150, 301, 5))
+            ),
         }
-    
+
     def _build_device_specs(self) -> List[DeviceSpec]:
         """Build all device specifications with stable Unit IDs.
-        
+
         Each device has an explicit unit_id and spec_id that never changes,
         even if the order in this list changes. This ensures backward
         compatibility when adding, removing, or reordering devices.
-        
+
         The spec_id is also used as the translation key for device names
         and descriptions via DEVICE_TRANSLATIONS.
-        
+
         Unit ID Grouping (with gaps for future expansion):
         ═══════════════════════════════════════════════════
-        
+
         Group 1: Status Overview (1-9)
         ──────────────────────────────
           1     : Working mode status display
           2-9   : Reserved for future status devices
-        
+
         Group 2: User Controls (10-29)
         ──────────────────────────────
           10-16 : Writable control devices (mode selectors, setpoints)
           17-29 : Reserved for future controls
-        
+
         Group 3: Power Input (30-39)
         ────────────────────────────
           30-32 : Electrical power (total, heating, DHW)
           33-39 : Reserved for future power metrics
-        
+
         Group 4: Heat Output (40-49)
         ────────────────────────────
           40-42 : Thermal output (total, heating, DHW)
           43-49 : Reserved for future heat metrics
-        
+
         Group 5: Efficiency (50-59)
         ───────────────────────────
           50-52 : COP metrics (total, heating, DHW)
           53-59 : Reserved for future efficiency metrics
-        
+
         Group 6: Heating Circuit (60-79)
         ────────────────────────────────
           60-65 : Temperatures and spreads
           66-67 : Pump and flow
           68-79 : Reserved for future heating devices
-        
+
         Group 7: DHW (80-89)
         ────────────────────
           80    : DHW temperature
           81-89 : Reserved for future DHW devices
-        
+
         Group 8: Environment (90-99)
         ────────────────────────────
           90-91 : Outdoor temperatures
           92-93 : Room temperatures
           94-99 : Reserved for future environmental
-        
+
         Group 9: Source Circuit (100-119)
         ──────────────────────────────────
           100-104 : Temperatures and spreads
           105-106 : Pump and flow
           107-119 : Reserved for future source devices
-        
+
         Group 10: Mixing Circuits (120-139)
         ───────────────────────────────────
           120-121 : Mixing circuit 1
           122-129 : Reserved for MC1
           130-131 : Mixing circuit 2
           132-139 : Reserved for MC2
-        
+
         Group 11: Compressor (140-159)
         ──────────────────────────────
           140-144 : Compressor operation
           145-159 : Reserved for future compressor
-        
+
         Group 12: Refrigerant Circuit (160-179)
         ───────────────────────────────────────
           160-167 : Temperatures and pressures
           168-170 : Retired (legacy condensing/subcooling)
           171-174 : Refrigerant metrics (lift, approach, discharge headroom, compression ratio)
           175-179 : Reserved
-        
+
         Group 13: Statistics & Counters (180-199)
         ─────────────────────────────────────────
           180-185 : Runtime counters and cycle tracking
           186-199 : Reserved for future statistics
-        
+
         Group 14: Diagnostics (200-209)
         ───────────────────────────────
           200-201 : Error count and status flags
           202-209 : Reserved for future diagnostics
         """
-        heating_mode_options = ['Automatic', '2nd heat source', 'Party', 'Holidays', 'Off']
-        dhw_power_options = ['Normal', 'Luxury']
-        
+        heating_mode_options = ["Automatic", "2nd heat source", "Party", "Holidays", "Off"]
+        dhw_power_options = ["Normal", "Luxury"]
+
         return [
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 1: STATUS OVERVIEW (Units 1-9)
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 1: Current operating mode status text
             DeviceFactory.create_text_device(
-                1, 'working_mode', 'READ_CALCUL', 
+                1,
+                "working_mode",
+                "READ_CALCUL",
                 LuxtronikAddress.WORKING_MODE,
-                LuxtronikAddress.POWER_TOTAL, 0.1, used=1, image=15),
-            
+                LuxtronikAddress.POWER_TOTAL,
+                0.1,
+                used=1,
+                image=15,
+            ),
             # Units 2-9: Reserved for future status devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 2: USER CONTROLS (Units 10-29)
             # All writable devices in one place - the "control panel"
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 10: Heating operation mode selector switch [WRITABLE]
             DeviceFactory.create_selector_device(
-                10, 'heating_mode', 'READ_PARAMS', 
+                10,
+                "heating_mode",
+                "READ_PARAMS",
                 LuxtronikAddress.HEATING_MODE,
-                heating_mode_options, [0, 1, 2, 3, 4], LuxtronikAddress.HEATING_MODE, used=1),
-            
+                heating_mode_options,
+                [0, 1, 2, 3, 4],
+                LuxtronikAddress.HEATING_MODE,
+                used=1,
+            ),
             # Unit 11: Hot water operation mode selector switch [WRITABLE]
             DeviceFactory.create_selector_device(
-                11, 'hot_water_mode', 'READ_PARAMS', 
+                11,
+                "hot_water_mode",
+                "READ_PARAMS",
                 LuxtronikAddress.HOT_WATER_MODE,
-                heating_mode_options, [0, 1, 2, 3, 4], LuxtronikAddress.HOT_WATER_MODE, used=1,
-                image=11),
-            
+                heating_mode_options,
+                [0, 1, 2, 3, 4],
+                LuxtronikAddress.HOT_WATER_MODE,
+                used=1,
+                image=11,
+            ),
             # Unit 12: DHW Power Mode selector switch [WRITABLE]
             DeviceFactory.create_selector_device(
-                12, 'dhw_power_mode', 'READ_PARAMS', 
+                12,
+                "dhw_power_mode",
+                "READ_PARAMS",
                 LuxtronikAddress.DHW_POWER_MODE,
-                dhw_power_options, [0, 1], LuxtronikAddress.DHW_POWER_MODE, used=1,
-                image=11),
-            
+                dhw_power_options,
+                [0, 1],
+                LuxtronikAddress.DHW_POWER_MODE,
+                used=1,
+                image=11,
+            ),
             # Unit 13: Cooling mode enable/disable switch [WRITABLE]
             DeviceFactory.create_switch_device(
-                13, 'cooling_enabled', 'READ_PARAMS', 
-                LuxtronikAddress.COOLING_ENABLED, used=1),
-            
+                13, "cooling_enabled", "READ_PARAMS", LuxtronikAddress.COOLING_ENABLED, used=1
+            ),
             # Unit 14: Temperature offset adjustment [WRITABLE]
             DeviceFactory.create_setpoint_device(
-                14, 'temp_offset', 'READ_PARAMS', 
+                14,
+                "temp_offset",
+                "READ_PARAMS",
                 LuxtronikAddress.TEMP_OFFSET,
-                min_val="-5", max_val="5", used=0),
-            
+                min_val="-5",
+                max_val="5",
+                used=0,
+            ),
             # Unit 15: Domestic hot water target temperature setting [WRITABLE]
             DeviceFactory.create_setpoint_device(
-                15, 'dhw_temp_target', 'READ_PARAMS', 
+                15,
+                "dhw_temp_target",
+                "READ_PARAMS",
                 LuxtronikAddress.DHW_TEMP_TARGET,
-                min_val="30", max_val="65", used=0),
-            
+                min_val="30",
+                max_val="65",
+                used=0,
+            ),
             # Unit 16: Actual room temperature set-point [WRITABLE]
             DeviceFactory.create_setpoint_device(
-                16, 'room_temp_setpoint', 'READ_PARAMS', 
+                16,
+                "room_temp_setpoint",
+                "READ_PARAMS",
                 LuxtronikAddress.ROOM_TEMP_SETPOINT,
-                min_val="15", max_val="30", used=1),
-            
+                min_val="15",
+                max_val="30",
+                used=1,
+            ),
             # Units 17-29: Reserved for future controls
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 3: POWER INPUT (Units 30-39)
             # Electrical consumption tracking
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 30: Total electrical power consumption
             DeviceFactory.create_power_device(
-                30, 'power_total', 'READ_CALCUL', 
-                LuxtronikAddress.POWER_TOTAL, used=1),
-            
+                30, "power_total", "READ_CALCUL", LuxtronikAddress.POWER_TOTAL, used=1
+            ),
             # Unit 31: Heating mode electrical power consumption
             DeviceFactory.create_split_power_device(
-                31, 'power_heating', 'READ_CALCUL', 
+                31,
+                "power_heating",
+                "READ_CALCUL",
                 LuxtronikAddress.POWER_TOTAL,
-                LuxtronikAddress.WORKING_MODE, [0], used=1),
-            
+                LuxtronikAddress.WORKING_MODE,
+                [0],
+                used=1,
+            ),
             # Unit 32: Hot water mode electrical power consumption
             DeviceFactory.create_split_power_device(
-                32, 'power_dhw', 'READ_CALCUL', 
+                32,
+                "power_dhw",
+                "READ_CALCUL",
                 LuxtronikAddress.POWER_TOTAL,
-                LuxtronikAddress.WORKING_MODE, [1], used=1),
-            
+                LuxtronikAddress.WORKING_MODE,
+                [1],
+                used=1,
+            ),
             # Units 33-39: Reserved for future power metrics
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 4: HEAT OUTPUT (Units 40-49)
             # Thermal energy delivery tracking
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 40: Total heat output power
             DeviceFactory.create_power_device(
-                40, 'heat_out_total', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_OUTPUT, generated=True, used=1),
-            
+                40,
+                "heat_out_total",
+                "READ_CALCUL",
+                LuxtronikAddress.HEAT_OUTPUT,
+                generated=True,
+                used=1,
+            ),
             # Unit 41: Heating mode heat output power
             DeviceFactory.create_split_power_device(
-                41, 'heat_out_heating', 'READ_CALCUL', 
+                41,
+                "heat_out_heating",
+                "READ_CALCUL",
                 LuxtronikAddress.HEAT_OUTPUT,
-                LuxtronikAddress.WORKING_MODE, [0], generated=True, used=1, image=15),
-            
+                LuxtronikAddress.WORKING_MODE,
+                [0],
+                generated=True,
+                used=1,
+                image=15,
+            ),
             # Unit 42: Hot water mode heat output power
             DeviceFactory.create_split_power_device(
-                42, 'heat_out_dhw', 'READ_CALCUL', 
+                42,
+                "heat_out_dhw",
+                "READ_CALCUL",
                 LuxtronikAddress.HEAT_OUTPUT,
-                LuxtronikAddress.WORKING_MODE, [1], generated=True, used=1, image=15),
-            
+                LuxtronikAddress.WORKING_MODE,
+                [1],
+                generated=True,
+                used=1,
+                image=15,
+            ),
             # Units 43-49: Reserved for future heat output metrics
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 5: EFFICIENCY (Units 50-59)
             # COP and efficiency metrics
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 50: Overall system COP (Coefficient of Performance)
             # Filtered to only log during active heating or DHW modes
             DeviceFactory.create_cop_device(
-                50, 'cop_total', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_OUTPUT, LuxtronikAddress.POWER_TOTAL,
-                allowed_modes=[0, 1], used=1),  # Heating + DHW modes
-            
+                50,
+                "cop_total",
+                "READ_CALCUL",
+                LuxtronikAddress.HEAT_OUTPUT,
+                LuxtronikAddress.POWER_TOTAL,
+                allowed_modes=[0, 1],
+                used=1,
+            ),  # Heating + DHW modes
             # Unit 51: COP for heating mode only
             # Only logs when system is in heating mode (mode 0) at steady-state
             DeviceFactory.create_cop_device(
-                51, 'cop_heating', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_OUTPUT, LuxtronikAddress.POWER_TOTAL,
-                allowed_modes=[0], used=1),  # Heating mode only
-            
-            # Unit 52: COP for DHW (domestic hot water) mode only  
+                51,
+                "cop_heating",
+                "READ_CALCUL",
+                LuxtronikAddress.HEAT_OUTPUT,
+                LuxtronikAddress.POWER_TOTAL,
+                allowed_modes=[0],
+                used=1,
+            ),  # Heating mode only
+            # Unit 52: COP for DHW (domestic hot water) mode only
             # Only logs when system is in DHW mode (mode 1) at steady-state
             DeviceFactory.create_cop_device(
-                52, 'cop_dhw', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_OUTPUT, LuxtronikAddress.POWER_TOTAL,
-                allowed_modes=[1], used=1),  # DHW mode only
-            
+                52,
+                "cop_dhw",
+                "READ_CALCUL",
+                LuxtronikAddress.HEAT_OUTPUT,
+                LuxtronikAddress.POWER_TOTAL,
+                allowed_modes=[1],
+                used=1,
+            ),  # DHW mode only
             # Units 53-59: Reserved for future efficiency metrics
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 6: HEATING CIRCUIT (Units 60-79)
             # All heating circuit devices together
             # ═══════════════════════════════════════════════════════════════════
-            
             # --- Temperatures (Units 60-65) ---
-            
             # Unit 60: Heat supply/flow temperature sensor
             DeviceFactory.create_temperature_device(
-                60, 'heat_supply_temp', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_SUPPLY_TEMP, used=1),
-            
+                60, "heat_supply_temp", "READ_CALCUL", LuxtronikAddress.HEAT_SUPPLY_TEMP, used=1
+            ),
             # Unit 61: Return temperature sensor from heating system
             DeviceFactory.create_temperature_device(
-                61, 'heat_return_temp', 'READ_CALCUL', 
-                LuxtronikAddress.HEAT_RETURN_TEMP, used=1),
-            
+                61, "heat_return_temp", "READ_CALCUL", LuxtronikAddress.HEAT_RETURN_TEMP, used=1
+            ),
             # Unit 62: Calculated target return temperature
             DeviceFactory.create_temperature_device(
-                62, 'return_temp_target', 'READ_CALCUL', 
-                LuxtronikAddress.RETURN_TEMP_TARGET, used=1),
-            
+                62, "return_temp_target", "READ_CALCUL", LuxtronikAddress.RETURN_TEMP_TARGET, used=1
+            ),
             # Unit 63: Heating temperature difference (Supply - Return)
             # Gated: ΔT approaches zero as distribution loop equilibrates when idle
             DeviceFactory.create_temp_diff_device(
-                63, 'heating_temp_diff', 'READ_CALCUL', 
+                63,
+                "heating_temp_diff",
+                "READ_CALCUL",
                 [LuxtronikAddress.HEAT_SUPPLY_TEMP, LuxtronikAddress.HEAT_RETURN_TEMP],
-                gated=True, used=1),
-            
+                gated=True,
+                used=1,
+            ),
             # Unit 64: Controller's heating circuit spread target (ΔT setpoint)
             DeviceFactory.create_custom_device(
-                64, 'heating_spread_target', 'READ_CALCUL',
-                LuxtronikAddress.HEATING_SPREAD_TARGET, 'K', divider=10, used=0, precision='0.1'),
-            
+                64,
+                "heating_spread_target",
+                "READ_CALCUL",
+                LuxtronikAddress.HEATING_SPREAD_TARGET,
+                "K",
+                divider=10,
+                used=0,
+                precision="0.1",
+            ),
             # Unit 65: Controller's heating circuit spread actual (measured ΔT)
             DeviceFactory.create_custom_device(
-                65, 'heating_spread_actual', 'READ_CALCUL',
-                LuxtronikAddress.HEATING_SPREAD_ACTUAL, 'K', divider=10, used=0, precision='0.1'),
-            
+                65,
+                "heating_spread_actual",
+                "READ_CALCUL",
+                LuxtronikAddress.HEATING_SPREAD_ACTUAL,
+                "K",
+                divider=10,
+                used=0,
+                precision="0.1",
+            ),
             # --- Pump and Flow (Units 66-67) ---
-            
             # Unit 66: Heating circulation pump speed percentage
             DeviceFactory.create_percentage_device(
-                66, 'heating_pump_speed', 'READ_CALCUL', 
-                LuxtronikAddress.HEATING_PUMP_SPEED, used=1),
-            
+                66, "heating_pump_speed", "READ_CALCUL", LuxtronikAddress.HEATING_PUMP_SPEED, used=1
+            ),
             # Unit 67: Heating circuit flow rate measurement (hidden by default)
             # Note: This measures flow through the HUP pump circuit (water side)
             # Used for thermal power calculation via heat meter (WMZ)
             DeviceFactory.create_custom_device(
-                67, 'heating_flow', 'READ_CALCUL',
-                LuxtronikAddress.HEATING_FLOW, 'L/h', used=0, image=35),
-            
+                67,
+                "heating_flow",
+                "READ_CALCUL",
+                LuxtronikAddress.HEATING_FLOW,
+                "L/h",
+                used=0,
+                image=35,
+            ),
             # Units 68-79: Reserved for future heating circuit devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 7: DHW (Units 80-89)
             # Domestic hot water system
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 80: Domestic hot water current temperature
             DeviceFactory.create_temperature_device(
-                80, 'dhw_temp', 'READ_CALCUL', 
-                LuxtronikAddress.DHW_TEMP, used=1),
-            
+                80, "dhw_temp", "READ_CALCUL", LuxtronikAddress.DHW_TEMP, used=1
+            ),
             # Units 81-89: Reserved for future DHW devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 8: ENVIRONMENT (Units 90-99)
             # Outdoor and room temperatures
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 90: Outside ambient temperature sensor
             DeviceFactory.create_temperature_device(
-                90, 'outside_temp', 'READ_CALCUL', 
-                LuxtronikAddress.OUTSIDE_TEMP, used=1),
-            
+                90, "outside_temp", "READ_CALCUL", LuxtronikAddress.OUTSIDE_TEMP, used=1
+            ),
             # Unit 91: Average outside temperature over time
             DeviceFactory.create_temperature_device(
-                91, 'outside_temp_avg', 'READ_CALCUL', 
-                LuxtronikAddress.OUTSIDE_TEMP_AVG, used=0),
-            
+                91, "outside_temp_avg", "READ_CALCUL", LuxtronikAddress.OUTSIDE_TEMP_AVG, used=0
+            ),
             # Unit 92: Room temperature sensor reading
             DeviceFactory.create_temperature_device(
-                92, 'room_temp', 'READ_CALCUL', 
-                LuxtronikAddress.ROOM_TEMP, used=1),
-            
+                92, "room_temp", "READ_CALCUL", LuxtronikAddress.ROOM_TEMP, used=1
+            ),
             # Unit 93: Room temperature setpoint (read-only display)
             DeviceFactory.create_temperature_device(
-                93, 'room_temp_target', 'READ_CALCUL', 
-                LuxtronikAddress.ROOM_TEMP_TARGET, used=0),
-            
+                93, "room_temp_target", "READ_CALCUL", LuxtronikAddress.ROOM_TEMP_TARGET, used=0
+            ),
             # Units 94-99: Reserved for future environmental devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 9: SOURCE CIRCUIT (Units 100-119)
             # Ground/brine loop - complete circuit in one group
             # ═══════════════════════════════════════════════════════════════════
-            
             # --- Temperatures (Units 100-104) ---
-            
             # Unit 100: Source inlet temperature (from ground/well)
             DeviceFactory.create_temperature_device(
-                100, 'source_in_temp', 'READ_CALCUL', 
-                LuxtronikAddress.SOURCE_IN_TEMP, used=1),
-            
+                100, "source_in_temp", "READ_CALCUL", LuxtronikAddress.SOURCE_IN_TEMP, used=1
+            ),
             # Unit 101: Source outlet temperature (to ground/well)
             DeviceFactory.create_temperature_device(
-                101, 'source_out_temp', 'READ_CALCUL', 
-                LuxtronikAddress.SOURCE_OUT_TEMP, used=1),
-            
+                101, "source_out_temp", "READ_CALCUL", LuxtronikAddress.SOURCE_OUT_TEMP, used=1
+            ),
             # Unit 102: Brine temperature difference (Source in - Source out)
             # Gated: ΔT approaches zero as source loop equilibrates when idle
             DeviceFactory.create_temp_diff_device(
-                102, 'brine_temp_diff', 'READ_CALCUL', 
+                102,
+                "brine_temp_diff",
+                "READ_CALCUL",
                 [LuxtronikAddress.SOURCE_IN_TEMP, LuxtronikAddress.SOURCE_OUT_TEMP],
-                gated=True, used=1),
-            
+                gated=True,
+                used=1,
+            ),
             # Unit 103: Controller's source circuit spread target (ΔT setpoint)
             DeviceFactory.create_custom_device(
-                103, 'source_spread_target', 'READ_CALCUL',
-                LuxtronikAddress.SOURCE_SPREAD_TARGET, 'K', divider=10, used=0, precision='0.1'),
-            
+                103,
+                "source_spread_target",
+                "READ_CALCUL",
+                LuxtronikAddress.SOURCE_SPREAD_TARGET,
+                "K",
+                divider=10,
+                used=0,
+                precision="0.1",
+            ),
             # Unit 104: Controller's source circuit spread actual (measured ΔT)
             DeviceFactory.create_custom_device(
-                104, 'source_spread_actual', 'READ_CALCUL',
-                LuxtronikAddress.SOURCE_SPREAD_ACTUAL, 'K', divider=10, used=0, precision='0.1'),
-            
+                104,
+                "source_spread_actual",
+                "READ_CALCUL",
+                LuxtronikAddress.SOURCE_SPREAD_ACTUAL,
+                "K",
+                divider=10,
+                used=0,
+                precision="0.1",
+            ),
             # --- Pump and Flow (Units 105-106) ---
-            
             # Unit 105: Brine/well circulation pump speed percentage
             DeviceFactory.create_percentage_device(
-                105, 'brine_pump_speed', 'READ_CALCUL', 
-                LuxtronikAddress.BRINE_PUMP_SPEED, used=1),
-            
+                105, "brine_pump_speed", "READ_CALCUL", LuxtronikAddress.BRINE_PUMP_SPEED, used=1
+            ),
             # Unit 106: Source/brine circuit flow rate measurement
             # Note: This measures flow through the VBO pump circuit (brine side)
             DeviceFactory.create_custom_device(
-                106, 'source_flow', 'READ_CALCUL', 
-                LuxtronikAddress.SOURCE_FLOW, 'l/h', used=1, image=35),
-            
+                106,
+                "source_flow",
+                "READ_CALCUL",
+                LuxtronikAddress.SOURCE_FLOW,
+                "l/h",
+                used=1,
+                image=35,
+            ),
             # Units 107-119: Reserved for future source circuit devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 10: MIXING CIRCUITS (Units 120-139)
             # Multi-zone heating support
             # ═══════════════════════════════════════════════════════════════════
-            
             # --- Mixing Circuit 1 (Units 120-129) ---
-            
             # Unit 120: Mixing circuit 1 current temperature
             DeviceFactory.create_temperature_device(
-                120, 'mc1_temp', 'READ_CALCUL', 
-                LuxtronikAddress.MC1_TEMP, used=0),
-            
+                120, "mc1_temp", "READ_CALCUL", LuxtronikAddress.MC1_TEMP, used=0
+            ),
             # Unit 121: Mixing circuit 1 target temperature
             DeviceFactory.create_temperature_device(
-                121, 'mc1_temp_target', 'READ_CALCUL', 
-                LuxtronikAddress.MC1_TEMP_TARGET, used=0),
-            
+                121, "mc1_temp_target", "READ_CALCUL", LuxtronikAddress.MC1_TEMP_TARGET, used=0
+            ),
             # Units 122-129: Reserved for MC1 expansion
-            
             # --- Mixing Circuit 2 (Units 130-139) ---
-            
             # Unit 130: Mixing circuit 2 current temperature
             DeviceFactory.create_temperature_device(
-                130, 'mc2_temp', 'READ_CALCUL', 
-                LuxtronikAddress.MC2_TEMP, used=0),
-            
+                130, "mc2_temp", "READ_CALCUL", LuxtronikAddress.MC2_TEMP, used=0
+            ),
             # Unit 131: Mixing circuit 2 target temperature
             DeviceFactory.create_temperature_device(
-                131, 'mc2_temp_target', 'READ_CALCUL', 
-                LuxtronikAddress.MC2_TEMP_TARGET, used=0),
-            
+                131, "mc2_temp_target", "READ_CALCUL", LuxtronikAddress.MC2_TEMP_TARGET, used=0
+            ),
             # Units 132-139: Reserved for MC2 expansion
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 11: COMPRESSOR (Units 140-159)
             # Compressor operation and performance
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 140: Compressor frequency/speed
             DeviceFactory.create_custom_device(
-                140, 'compressor_freq', 'READ_CALCUL', 
-                LuxtronikAddress.COMPRESSOR_FREQ, 'Hz', used=1),
-            
+                140,
+                "compressor_freq",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_FREQ,
+                "Hz",
+                used=1,
+            ),
             # Unit 141: Controller target compressor frequency (hidden by default)
             # Compare to actual frequency to see controller tracking
             DeviceFactory.create_custom_device(
-                141, 'target_frequency', 'READ_CALCUL',
-                LuxtronikAddress.TARGET_FREQUENCY, 'Hz', used=0),
-            
+                141,
+                "target_frequency",
+                "READ_CALCUL",
+                LuxtronikAddress.TARGET_FREQUENCY,
+                "Hz",
+                used=0,
+            ),
             # Unit 142: Minimum frequency target (hidden by default)
             # Used in COP gating logic to detect steady-state operation
             DeviceFactory.create_custom_device(
-                142, 'min_frequency', 'READ_CALCUL',
-                LuxtronikAddress.COMPRESSOR_FREQ_MIN, 'Hz', used=0),
-            
+                142,
+                "min_frequency",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_FREQ_MIN,
+                "Hz",
+                used=0,
+            ),
             # Unit 143: Maximum frequency limit (hidden by default)
             # System capacity ceiling, used for capacity utilization calculation
             DeviceFactory.create_custom_device(
-                143, 'max_frequency', 'READ_CALCUL',
-                LuxtronikAddress.COMPRESSOR_FREQ_MAX, 'Hz', used=0),
-            
+                143,
+                "max_frequency",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_FREQ_MAX,
+                "Hz",
+                used=0,
+            ),
             # Unit 144: Compressor capacity utilization percentage
             # Shows current load relative to maximum capability
             # Gated: only updates during steady-state operation
             DeviceFactory.create_capacity_device(
-                144, 'compressor_capacity', 'READ_CALCUL',
-                LuxtronikAddress.COMPRESSOR_FREQ, LuxtronikAddress.COMPRESSOR_FREQ_MAX, used=1),
-            
+                144,
+                "compressor_capacity",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_FREQ,
+                LuxtronikAddress.COMPRESSOR_FREQ_MAX,
+                used=1,
+            ),
             # Unit 145: Frequency headroom (target minus actual compressor frequency)
             # Gated: only reports while compressor is running (actual > 0)
             DeviceFactory.create_freq_headroom_device(
-                145, 'freq_headroom', 'READ_CALCUL',
-                LuxtronikAddress.TARGET_FREQUENCY, LuxtronikAddress.COMPRESSOR_FREQ),
-
+                145,
+                "freq_headroom",
+                "READ_CALCUL",
+                LuxtronikAddress.TARGET_FREQUENCY,
+                LuxtronikAddress.COMPRESSOR_FREQ,
+            ),
             # Units 146-159: Reserved for future compressor devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 12: REFRIGERANT CIRCUIT (Units 160-179)
             # Refrigerant temperatures and pressures
             # ═══════════════════════════════════════════════════════════════════
-            
             # --- Temperatures (Units 160-165) ---
-            
             # Unit 160: Hot gas temperature monitoring (compressor outlet)
             DeviceFactory.create_temperature_device(
-                160, 'hot_gas_temp', 'READ_CALCUL', 
-                LuxtronikAddress.HOT_GAS_TEMP, used=1),
-            
+                160, "hot_gas_temp", "READ_CALCUL", LuxtronikAddress.HOT_GAS_TEMP, used=1
+            ),
             # Unit 161: Compressor suction temperature (entering compressor)
             DeviceFactory.create_temperature_device(
-                161, 'suction_temp', 'READ_CALCUL', 
-                LuxtronikAddress.SUCTION_TEMP, used=1),
-            
+                161, "suction_temp", "READ_CALCUL", LuxtronikAddress.SUCTION_TEMP, used=1
+            ),
             # Unit 162: Compressor body heating temperature (LIN inverter sensor)
             # Not discharge-line gas; measures the compressor housing heat rejection.
             DeviceFactory.create_temperature_device(
-                162, 'compressor_heating_temp', 'READ_CALCUL',
-                LuxtronikAddress.DISCHARGE_TEMP, used=1),
-
+                162,
+                "compressor_heating_temp",
+                "READ_CALCUL",
+                LuxtronikAddress.DISCHARGE_TEMP,
+                used=1,
+            ),
             # Unit 163: Evaporating temperature (refrigerant evaporation point)
             # Gated: meaningless during idle and passive cooling (refrigerant values)
             DeviceFactory.create_custom_device(
-                163, 'evaporating_temp', 'READ_CALCUL',
-                LuxtronikAddress.EVAPORATING_TEMP, '°C', divider=10,
-                gated=True, precision='0.1', used=1),
-
+                163,
+                "evaporating_temp",
+                "READ_CALCUL",
+                LuxtronikAddress.EVAPORATING_TEMP,
+                "°C",
+                divider=10,
+                gated=True,
+                precision="0.1",
+                used=1,
+            ),
             # Unit 164: Condensing temperature (controller's saturation temp, calc[233])
             # Same address as liquid line but confirmed as controller-computed condensing temp.
             # Gated: meaningless during idle and passive cooling (refrigerant values)
             DeviceFactory.create_custom_device(
-                164, 'condensing_temp', 'READ_CALCUL',
-                LuxtronikAddress.CONDENSING_TEMP_CALC, '°C', divider=10,
-                gated=True, precision='0.1', used=1),
-
+                164,
+                "condensing_temp",
+                "READ_CALCUL",
+                LuxtronikAddress.CONDENSING_TEMP_CALC,
+                "°C",
+                divider=10,
+                gated=True,
+                precision="0.1",
+                used=1,
+            ),
             # Unit 165: Superheat monitoring
             # Gated: stale readings during idle corrupt operating averages
             DeviceFactory.create_custom_device(
-                165, 'superheat', 'READ_CALCUL',
-                LuxtronikAddress.SUPERHEAT, 'K', divider=10, gated=True, used=1),
-
+                165,
+                "superheat",
+                "READ_CALCUL",
+                LuxtronikAddress.SUPERHEAT,
+                "K",
+                divider=10,
+                gated=True,
+                used=1,
+            ),
             # --- Pressures (Units 166-167) ---
-
             # Unit 166: High pressure monitoring
             # Gated: equilibrates to ambient when off, not operationally meaningful
             DeviceFactory.create_custom_device(
-                166, 'high_pressure', 'READ_CALCUL',
-                LuxtronikAddress.HIGH_PRESSURE, 'bar', divider=100, gated=True, used=1),
-
+                166,
+                "high_pressure",
+                "READ_CALCUL",
+                LuxtronikAddress.HIGH_PRESSURE,
+                "bar",
+                divider=100,
+                gated=True,
+                used=1,
+            ),
             # Unit 167: Low pressure monitoring
             # Gated: equilibrates to ambient when off, not operationally meaningful
             DeviceFactory.create_custom_device(
-                167, 'low_pressure', 'READ_CALCUL',
-                LuxtronikAddress.LOW_PRESSURE, 'bar', divider=100, gated=True, used=1),
-
+                167,
+                "low_pressure",
+                "READ_CALCUL",
+                LuxtronikAddress.LOW_PRESSURE,
+                "bar",
+                divider=100,
+                gated=True,
+                used=1,
+            ),
             # Units 168-170: Retired (calc[258] condensing temp, subcooling, condensing pressure).
             # Replaced by calc[233] condensing temp on unit 164 and calc-based lift/approach.
-
             # Unit 171: Refrigerant lift (condensing temp - evaporating temp)
             # Uses calc[233] condensing temp directly (no P-T curve conversion).
             # Gated: only meaningful during steady-state compressor operation
             DeviceFactory.create_temp_diff_device(
-                171, 'refrigerant_lift', 'READ_CALCUL',
+                171,
+                "refrigerant_lift",
+                "READ_CALCUL",
                 [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.EVAPORATING_TEMP],
-                divider=10, gated=True),
-
+                divider=10,
+                gated=True,
+            ),
             # Unit 172: Condensing-supply ΔT (condensing temp - heat supply water temp).
             # Signed: positive = water below condensing (condenser headroom, normal in
             # low-temp heating); negative = desuperheat-dominated (high water temps / DHW,
@@ -1849,238 +2065,292 @@ class LuxtronikPlugin:
             # is the same physical reference in heating and DHW. Uses calc[233] directly.
             # Gated: only meaningful during steady-state compressor operation.
             DeviceFactory.create_temp_diff_device(
-                172, 'condensing_supply_delta', 'READ_CALCUL',
+                172,
+                "condensing_supply_delta",
+                "READ_CALCUL",
                 [LuxtronikAddress.CONDENSING_TEMP_CALC, LuxtronikAddress.HEAT_SUPPLY_TEMP],
-                divider=10, gated=True),
-
+                divider=10,
+                gated=True,
+            ),
             # Unit 173: Discharge headroom (T-HG max setpoint - actual hot gas temp)
             # Margin remaining before the hot-gas trip limit is reached (~115 C).
             # Gated: only meaningful during steady-state compressor operation
             DeviceFactory.create_discharge_headroom_device(
-                173, 'discharge_headroom', 'READ_CALCUL',
-                LuxtronikAddress.HOT_GAS_MAX_SETPOINT, LuxtronikAddress.HOT_GAS_TEMP),
-
+                173,
+                "discharge_headroom",
+                "READ_CALCUL",
+                LuxtronikAddress.HOT_GAS_MAX_SETPOINT,
+                LuxtronikAddress.HOT_GAS_TEMP,
+            ),
             # Unit 174: Compression ratio (HD / ND on absolute pressures)
             # Rising ratio over time flags refrigerant-circuit degradation.
             # Gated: only meaningful during steady-state compressor operation
             DeviceFactory.create_compression_ratio_device(
-                174, 'compression_ratio', 'READ_CALCUL',
-                LuxtronikAddress.HIGH_PRESSURE, LuxtronikAddress.LOW_PRESSURE, used=1),
-
+                174,
+                "compression_ratio",
+                "READ_CALCUL",
+                LuxtronikAddress.HIGH_PRESSURE,
+                LuxtronikAddress.LOW_PRESSURE,
+                used=1,
+            ),
             # Units 175-179: Reserved for future refrigerant devices
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 13: STATISTICS & COUNTERS (Units 180-199)
             # Operational history and lifetime tracking
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 180: Lifetime compressor operating hours
             # Useful for maintenance scheduling
             DeviceFactory.create_runtime_device(
-                180, 'compressor_runtime', 'READ_CALCUL',
-                LuxtronikAddress.COMPRESSOR_RUNTIME, used=1, image=21),
-            
+                180,
+                "compressor_runtime",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_RUNTIME,
+                used=1,
+                image=21,
+            ),
             # Unit 181: Total compressor start count
             # Indicates cycling behavior and compressor wear
             DeviceFactory.create_counter_device(
-                181, 'compressor_starts', 'READ_CALCUL',
-                LuxtronikAddress.COMPRESSOR_STARTS, 'starts', used=1),
-            
+                181,
+                "compressor_starts",
+                "READ_CALCUL",
+                LuxtronikAddress.COMPRESSOR_STARTS,
+                "starts",
+                used=1,
+            ),
             # Unit 182: Duration of last completed compressor cycle
             # Updates only when a cycle completes (sparse updates)
             DeviceFactory.create_last_cycle_device(
-                182, 'last_cycle', 'READ_CALCUL',
-                LuxtronikAddress.CURRENT_CYCLE_TIME, used=1, image=21),
-            
+                182,
+                "last_cycle",
+                "READ_CALCUL",
+                LuxtronikAddress.CURRENT_CYCLE_TIME,
+                used=1,
+                image=21,
+            ),
             # Unit 183: Total operating hours in heating mode (hidden by default)
             DeviceFactory.create_runtime_device(
-                183, 'heating_runtime', 'READ_CALCUL',
-                LuxtronikAddress.HEATING_RUNTIME, used=0, image=21),
-            
+                183,
+                "heating_runtime",
+                "READ_CALCUL",
+                LuxtronikAddress.HEATING_RUNTIME,
+                used=0,
+                image=21,
+            ),
             # Unit 184: Total operating hours in hot water mode (hidden by default)
             DeviceFactory.create_runtime_device(
-                184, 'dhw_runtime', 'READ_CALCUL',
-                LuxtronikAddress.DHW_RUNTIME, used=0, image=21),
-            
+                184, "dhw_runtime", "READ_CALCUL", LuxtronikAddress.DHW_RUNTIME, used=0, image=21
+            ),
             # Unit 185: Total operating hours in passive cooling mode (hidden by default)
             DeviceFactory.create_runtime_device(
-                185, 'cooling_runtime', 'READ_CALCUL',
-                LuxtronikAddress.COOLING_RUNTIME, used=0, image=21),
-            
+                185,
+                "cooling_runtime",
+                "READ_CALCUL",
+                LuxtronikAddress.COOLING_RUNTIME,
+                used=0,
+                image=21,
+            ),
             # Units 186-199: Reserved for future statistics
-            
             # ═══════════════════════════════════════════════════════════════════
             # GROUP 14: DIAGNOSTICS (Units 200-209)
             # Error tracking and status flags
             # ═══════════════════════════════════════════════════════════════════
-            
             # Unit 200: Error count in controller memory (hidden by default)
             # Quick health indicator - check logs if count increases
             DeviceFactory.create_counter_device(
-                200, 'error_count', 'READ_CALCUL',
-                LuxtronikAddress.ERROR_COUNT, 'errors', used=0, image=13),
-            
+                200,
+                "error_count",
+                "READ_CALCUL",
+                LuxtronikAddress.ERROR_COUNT,
+                "errors",
+                used=0,
+                image=13,
+            ),
             # Unit 201: Cooling permitted status (hidden by default)
             # Read-only indicator showing if passive cooling is currently released
             # Based on outdoor temperature and settings - not user controllable
             DeviceFactory.create_status_switch_device(
-                201, 'cooling_permitted', 'READ_CALCUL',
-                LuxtronikAddress.COOLING_PERMITTED, used=0, image=16),
-            
+                201,
+                "cooling_permitted",
+                "READ_CALCUL",
+                LuxtronikAddress.COOLING_PERMITTED,
+                used=0,
+                image=16,
+            ),
             # Unit 202: Cooling release countdown timer
             # Shows remaining time before cooling mode is permitted
             DeviceFactory.create_custom_device(
-                202, 'cooling_release_timer', 'READ_CALCUL',
-                LuxtronikAddress.COOLING_RELEASE_TIMER, 'min', divider=60,
-                used=0, image=21),
-
+                202,
+                "cooling_release_timer",
+                "READ_CALCUL",
+                LuxtronikAddress.COOLING_RELEASE_TIMER,
+                "min",
+                divider=60,
+                used=0,
+                image=21,
+            ),
             # Units 203-209: Reserved for future diagnostics
         ]
-     
+
     def create_devices(self) -> None:
         """Create all Domoticz devices."""
         global _unit_specs, _plugin_ref
-        
+
         _logger.log("Creating devices", DebugLevel.BASIC)
-        
+
         # Store reference to plugin for command handling
         _plugin_ref = self
-        
+
         self._init_available_writes()
         specs = self._build_device_specs()
-        
+
         # Inject CycleTracker into the last_cycle device spec
         # The last_cycle device needs stateful tracking between heartbeats
         for spec in specs:
-            if spec.spec_id == 'last_cycle':
+            if spec.spec_id == "last_cycle":
                 spec.read_args = (self.cycle_tracker,)
                 _logger.log("Injected CycleTracker into last_cycle device", DebugLevel.VERBOSE)
                 break
-        
+
         # Multi-instance support: unique DeviceID per hardware
         device_id = self._device_id
-        
+
         for spec in specs:
             unit_id = spec.unit_id  # Use explicit unit_id, not position
             name = _translator.get_device_name(spec.spec_id)
             full_name = f"{Parameters['Name']} - {name}"
-            
+
             # Store spec in module-level storage for command handling
             _unit_specs[(device_id, unit_id)] = spec
-            
+
             # Store spec for later use (device updates)
             self._device_specs[unit_id] = spec
             self._command_specs[spec.command][unit_id] = spec
-            
+
             # Add description if available
             description = _translator.get_device_description(spec.spec_id)
             if description:
-                spec.device_params['Description'] = description
-            
+                spec.device_params["Description"] = description
+
             # Check if device exists
             if device_id not in Devices or unit_id not in Devices[device_id].Units:
                 # Create new unit
                 unit = Domoticz.Unit(
-                    Name=full_name,
-                    DeviceID=device_id,
-                    Unit=unit_id,
-                    **spec.device_params
+                    Name=full_name, DeviceID=device_id, Unit=unit_id, **spec.device_params
                 )
                 unit.Create()
-                _logger.log(f"Created device {unit_id} (spec_id={spec.spec_id}): {name}", DebugLevel.DEVICE)
+                _logger.log(
+                    f"Created device {unit_id} (spec_id={spec.spec_id}): {name}", DebugLevel.DEVICE
+                )
             else:
                 # Device exists - check if it should be updated
                 existing_unit = Devices[device_id].Units[unit_id]
                 current_name = existing_unit.Name
                 needs_options_update = False
                 needs_properties_update = False
-                
+
                 # Smart rename: only rename if current name's translation part
                 # matches a known translation (not user-customized)
                 # Device names have format: "{HardwareName} - {TranslatedName}"
                 if current_name != full_name:
                     # Extract the translation part (after " - ")
-                    if ' - ' in current_name:
-                        translation_part = current_name.split(' - ', 1)[1]
+                    if " - " in current_name:
+                        translation_part = current_name.split(" - ", 1)[1]
                     else:
                         translation_part = current_name
-                    
+
                     # Check if translation part is a known translation
                     if _translator.is_known_device_name(translation_part, spec.spec_id):
                         existing_unit.Name = full_name
                         needs_properties_update = True
-                        _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) renamed: {current_name} -> {full_name}", DebugLevel.DEVICE)
-                
+                        _logger.log(
+                            f"Device {unit_id} (spec_id={spec.spec_id}) renamed: {current_name} -> {full_name}",
+                            DebugLevel.DEVICE,
+                        )
+
                 # Update description if it's a known translation
                 current_description = existing_unit.Description
                 new_description = _translator.get_device_description(spec.spec_id)
-                
+
                 if current_description != new_description and new_description:
                     if _translator.is_known_description(current_description, spec.spec_id):
                         existing_unit.Description = new_description
                         needs_properties_update = True
-                        _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) description updated", DebugLevel.DEVICE)
-                
+                        _logger.log(
+                            f"Device {unit_id} (spec_id={spec.spec_id}) description updated",
+                            DebugLevel.DEVICE,
+                        )
+
                 # For selector switches: update LevelNames if they're known translations
                 if spec.selector_options:
                     current_options = existing_unit.Options
-                    if 'LevelNames' in current_options:
-                        current_level_names = current_options['LevelNames']
-                        new_level_names = _translator.translate_selector_options(spec.selector_options)
-                        
+                    if "LevelNames" in current_options:
+                        current_level_names = current_options["LevelNames"]
+                        new_level_names = _translator.translate_selector_options(
+                            spec.selector_options
+                        )
+
                         if current_level_names != new_level_names:
                             # Check if current options are known translations
-                            current_items = current_level_names.split('|')
+                            current_items = current_level_names.split("|")
                             all_known = all(
-                                _translator.is_known_selector_option(item, opt_key) 
-                                for item, opt_key in zip(current_items, spec.selector_options)
+                                _translator.is_known_selector_option(item, opt_key)
+                                for item, opt_key in zip(
+                                    current_items, spec.selector_options, strict=False
+                                )
                             )
-                            
+
                             if all_known:
                                 existing_unit.Options = {
                                     **current_options,
-                                    'LevelNames': new_level_names
+                                    "LevelNames": new_level_names,
                                 }
                                 needs_options_update = True
-                                _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) selector options updated", DebugLevel.DEVICE)
-                
+                                _logger.log(
+                                    f"Device {unit_id} (spec_id={spec.spec_id}) selector options updated",
+                                    DebugLevel.DEVICE,
+                                )
+
                 if needs_properties_update or needs_options_update:
                     # DomoticzEx requires UpdateProperties=True to update Name/Description
                     # and UpdateOptions=True to update Options
                     existing_unit.Update(
-                        Log=False, 
+                        Log=False,
                         UpdateProperties=needs_properties_update,
-                        UpdateOptions=needs_options_update
+                        UpdateOptions=needs_options_update,
                     )
                 else:
-                    _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) already exists: {current_name}", DebugLevel.DEVICE)
-        
+                    _logger.log(
+                        f"Device {unit_id} (spec_id={spec.spec_id}) already exists: {current_name}",
+                        DebugLevel.DEVICE,
+                    )
+
         _logger.log(f"Device creation complete: {len(specs)} devices", DebugLevel.BASIC)
-    
+
     def update_device(self, unit_id: int, new_values: Dict[str, Any]) -> bool:
         """Update a single device with optimized tracking.
-        
+
         Returns:
             True if device was updated, False if unchanged
         """
         if unit_id not in self._device_specs:
             return False
-        
+
         spec = self._device_specs[unit_id]
         device_id = self._device_id
-        
+
         if device_id not in Devices or unit_id not in Devices[device_id].Units:
             _logger.log(f"Device {unit_id} (spec_id={spec.spec_id}) not found", DebugLevel.DEVICE)
             return False
-        
+
         unit = Devices[device_id].Units[unit_id]
         needs_update, reason, diff = self.update_tracker.needs_update(unit, new_values)
-        
+
         if needs_update:
-            if 'nValue' in new_values:
-                unit.nValue = new_values['nValue']
-            if 'sValue' in new_values:
-                unit.sValue = str(new_values['sValue'])
+            if "nValue" in new_values:
+                unit.nValue = new_values["nValue"]
+            if "sValue" in new_values:
+                unit.sValue = str(new_values["sValue"])
             unit.Update(Log=True)
             _logger.log(f"Updated {spec.spec_id}: {reason} - {diff}", DebugLevel.DEVICE)
             return True
@@ -2088,78 +2358,85 @@ class LuxtronikPlugin:
             # Log tracker decisions at VERBOSE level for debugging update issues
             _logger.log(f"{spec.spec_id}: {reason}", DebugLevel.VERBOSE)
             return False
-    
+
     def update_devices(self, command: str, data_store: DataStore) -> None:
         """Update all devices for a command type using shared data store.
-        
+
         Args:
             command: The command type ('READ_CALCUL', 'READ_PARAMS')
             data_store: Dict mapping all command names to their data lists
         """
         _logger.log(f"Updating devices for {command}", DebugLevel.VERBOSE)
-        
+
         data_list = data_store.get(command, [])
         if not data_list:
             _logger.log(f"No data in store for {command}", DebugLevel.COMMS)
             return
-        
+
         # Track update statistics
         updated_count = 0
         unchanged_count = 0
         gated_count = 0
-        
+
         for unit_id, spec in self._command_specs[command].items():
             try:
                 address = spec.address
                 result = spec.read_converter.convert(data_store, command, address, *spec.read_args)
-                
+
                 # Handle both tuple (gated converters) and dict (regular converters) returns
                 if isinstance(result, tuple):
                     new_values, gate_reason = result
                 else:
                     new_values, gate_reason = result, None
-                
+
                 # Skip update if converter returns None (gating active)
                 if new_values is None:
                     gated_count += 1
                     if gate_reason:
-                        _logger.log(f"Skipping {spec.spec_id}: gated - {gate_reason}", DebugLevel.VERBOSE)
+                        _logger.log(
+                            f"Skipping {spec.spec_id}: gated - {gate_reason}", DebugLevel.VERBOSE
+                        )
                     else:
-                        _logger.log(f"Skipping {spec.spec_id}: converter returned None", DebugLevel.VERBOSE)
+                        _logger.log(
+                            f"Skipping {spec.spec_id}: converter returned None", DebugLevel.VERBOSE
+                        )
                     continue
-                
+
                 if self.update_device(unit_id, new_values):
                     updated_count += 1
                 else:
                     unchanged_count += 1
             except Exception as e:
                 _logger.error(f"Error updating device {unit_id} (spec_id={spec.spec_id})", exc=e)
-        
+
         # Log summary at BASIC level
-        _logger.log(f"{command}: Updated {updated_count}, unchanged {unchanged_count}, gated {gated_count}", DebugLevel.BASIC)
-    
+        _logger.log(
+            f"{command}: Updated {updated_count}, unchanged {unchanged_count}, gated {gated_count}",
+            DebugLevel.BASIC,
+        )
+
     def update_all(self) -> None:
         """Update all devices from all sources.
-        
+
         Fetches all command data first into a shared data_store, then updates
         devices. This allows gated converters to access data from other commands
         (e.g., compressor frequency from READ_CALCUL for steady-state checks).
-        
+
         Uses a single TCP connection for all read commands to avoid redundant
         handshakes (the Luxtronik controller supports sequential commands).
         """
         _logger.log("Full update starting", DebugLevel.VERBOSE)
-        
+
         # Command codes mapping
         command_codes = {
-            'READ_CALCUL': SocketCommand.READ_CALCUL,
-            'READ_PARAMS': SocketCommand.READ_PARAMS,
+            "READ_CALCUL": SocketCommand.READ_CALCUL,
+            "READ_PARAMS": SocketCommand.READ_PARAMS,
         }
-        
+
         # Phase 1: Fetch all command data on a single connection
         batch = [(code, 0, 0) for code in command_codes.values()]
         batch_results = self.connection.execute_batch_with_retry(batch)
-        
+
         data_store: DataStore = {}
         for command_name, code in command_codes.items():
             result = batch_results.get(code)
@@ -2172,23 +2449,23 @@ class LuxtronikPlugin:
                     _logger.log(f"No data received for {command_name}", DebugLevel.COMMS)
             else:
                 _logger.log(f"No result for {command_name}", DebugLevel.COMMS)
-        
+
         # Apply pump power compensation (modifies POWER_TOTAL in-place)
         self._apply_pump_compensation(data_store)
 
         # Phase 2: Update devices with shared data store
-        for command in command_codes.keys():
+        for command in command_codes:
             if command in data_store:
                 self.update_devices(command, data_store)
-        
+
         _logger.log("Full update complete", DebugLevel.VERBOSE)
-    
+
     def _validate_heartbeat(self, requested: int) -> int:
         """Validate and clamp heartbeat interval to safe range.
-        
+
         Args:
             requested: User-requested heartbeat interval in seconds
-            
+
         Returns:
             Clamped heartbeat value within ConfigLimits.HEARTBEAT_MIN and HEARTBEAT_MAX
         """
@@ -2205,22 +2482,22 @@ class LuxtronikPlugin:
             )
             return ConfigLimits.HEARTBEAT_MAX
         return requested
-    
+
     def _configure_max_cop(self, raw_value: str) -> None:
         """Parse and apply the max COP limit to the COP converter.
-        
+
         Args:
-            raw_value: String from Parameters['Mode1']. 
+            raw_value: String from Parameters['Mode1'].
                        Empty string or '0' disables filtering.
                        Positive float sets the upper COP limit.
         """
         raw_value = raw_value.strip()
-        
-        if not raw_value or raw_value == '0':
+
+        if not raw_value or raw_value == "0":
             DeviceFactory._cop_converter.max_cop = None
             _logger.log("Max COP filter: disabled", DebugLevel.BASIC)
             return
-        
+
         try:
             max_cop = float(raw_value)
             if max_cop <= 0:
@@ -2235,7 +2512,7 @@ class LuxtronikPlugin:
                 f"Invalid Max COP value '{raw_value}', filter disabled. "
                 f"Expected a positive number."
             )
-    
+
     def _configure_pump_compensation(self, mode4: str, mode5: str) -> None:
         """Parse pump power compensation settings.
 
@@ -2243,14 +2520,14 @@ class LuxtronikPlugin:
             mode4: '0' (off) or '1' (on)
             mode5: 'HUP_min,HUP_max,VBO_min,VBO_max' in watts
         """
-        self._pump_compensation_enabled = (mode4 == '1')
+        self._pump_compensation_enabled = mode4 == "1"
         self._pump_power_ranges = None
 
         if not self._pump_compensation_enabled:
             return
 
         try:
-            parts = [float(x.strip()) for x in mode5.split(',')]
+            parts = [float(x.strip()) for x in mode5.split(",")]
             if len(parts) != 4:
                 raise ValueError(f"Expected 4 values, got {len(parts)}")
             if any(p < 0 for p in parts):
@@ -2258,10 +2535,15 @@ class LuxtronikPlugin:
             if parts[0] > parts[1] or parts[2] > parts[3]:
                 raise ValueError("Min must not exceed max")
             self._pump_power_ranges = {
-                'hup_min': parts[0], 'hup_max': parts[1],
-                'vbo_min': parts[2], 'vbo_max': parts[3],
+                "hup_min": parts[0],
+                "hup_max": parts[1],
+                "vbo_min": parts[2],
+                "vbo_max": parts[3],
             }
-            _logger.log(f"Pump power compensation enabled: HUP {parts[0]}-{parts[1]}W, VBO {parts[2]}-{parts[3]}W", DebugLevel.BASIC)
+            _logger.log(
+                f"Pump power compensation enabled: HUP {parts[0]}-{parts[1]}W, VBO {parts[2]}-{parts[3]}W",
+                DebugLevel.BASIC,
+            )
         except (ValueError, IndexError) as e:
             _logger.error(f"Invalid pump power ranges '{mode5}': {e}. Disabling compensation.")
             self._pump_compensation_enabled = False
@@ -2287,7 +2569,7 @@ class LuxtronikPlugin:
         if not self._pump_compensation_enabled or self._pump_power_ranges is None:
             return
 
-        calc_data = data_store.get('READ_CALCUL', [])
+        calc_data = data_store.get("READ_CALCUL", [])
         if not calc_data:
             return
 
@@ -2297,8 +2579,8 @@ class LuxtronikPlugin:
             hup_speed = float(calc_data[LuxtronikAddress.HEATING_PUMP_SPEED])
             vbo_speed = float(calc_data[LuxtronikAddress.BRINE_PUMP_SPEED])
 
-            hup_power = self._estimate_pump_power(hup_speed, ranges['hup_min'], ranges['hup_max'])
-            vbo_power = self._estimate_pump_power(vbo_speed, ranges['vbo_min'], ranges['vbo_max'])
+            hup_power = self._estimate_pump_power(hup_speed, ranges["hup_min"], ranges["hup_max"])
+            vbo_power = self._estimate_pump_power(vbo_speed, ranges["vbo_min"], ranges["vbo_max"])
 
             total_power = compressor_power + hup_power + vbo_power
             calc_data[LuxtronikAddress.POWER_TOTAL] = total_power
@@ -2307,20 +2589,21 @@ class LuxtronikPlugin:
                 f"Pump compensation: compressor={compressor_power:.0f}W + "
                 f"HUP({hup_speed:.0f}%)={hup_power:.0f}W + "
                 f"VBO({vbo_speed:.0f}%)={vbo_power:.0f}W = {total_power:.0f}W",
-                DebugLevel.DEVICE)
+                DebugLevel.DEVICE,
+            )
         except (IndexError, TypeError, ValueError) as e:
             _logger.log(f"Pump compensation error: {type(e).__name__}: {e}", DebugLevel.VERBOSE)
 
     def _check_cop_logging_setting(self) -> None:
         """Check and warn if COP logging setting is not optimal.
-        
+
         For accurate COP averages over time, Domoticz should be configured with:
         Settings → Log History → 'Only add newly received values to the Log' = ENABLED
-        
+
         When disabled (default), Domoticz fills in the last received value every 5 minutes,
-        even when no new data is received. This means if the last COP sent was 10.2, that 
+        even when no new data is received. This means if the last COP sent was 10.2, that
         value gets logged every 5 minutes even when the heat pump is idle, skewing averages.
-        
+
         When enabled, Domoticz only logs values when they are actually received, creating
         gaps during idle periods. This gives accurate daily/monthly COP averages.
         """
@@ -2329,12 +2612,12 @@ class LuxtronikPlugin:
             # ShortLogAddOnlyNewValues: 1 = enabled (recommended), 0 = disabled
             # Note: Settings values are returned as strings
             setting_value = Settings.get("ShortLogAddOnlyNewValues", "0")
-            
+
             # Handle string comparison (Settings returns strings)
             if str(setting_value) == "1":
                 _logger.log(
                     "COP Logging: 'Only add newly received values' is ENABLED (recommended)",
-                    DebugLevel.BASIC
+                    DebugLevel.BASIC,
                 )
             else:
                 # This is an important warning, always show it
@@ -2345,15 +2628,17 @@ class LuxtronikPlugin:
                 )
         except NameError:
             # Settings dictionary not available (older Domoticz version?)
-            _logger.log("Settings dictionary not available, skipping COP logging check", DebugLevel.VERBOSE)
+            _logger.log(
+                "Settings dictionary not available, skipping COP logging check", DebugLevel.VERBOSE
+            )
         except Exception as e:
             # Other errors - log but don't fail
             _logger.log(f"Could not check COP logging setting: {e}", DebugLevel.VERBOSE)
-    
+
     def onStart(self) -> None:
         """Initialize the plugin."""
         global _logger, _translator, _heartbeat_interval
-        
+
         try:
             # Setup debugging
             try:
@@ -2361,22 +2646,20 @@ class LuxtronikPlugin:
             except (ValueError, TypeError, KeyError):
                 _logger.level = 0
             if _logger.level == DebugLevel.NONE:
-                Domoticz.Debugging(0)   # Silence everything
+                Domoticz.Debugging(0)  # Silence everything
             elif _logger.level == DebugLevel.ALL:
                 Domoticz.Debugging(62)  # Plugin Debug() + framework device/connection info
             else:
-                Domoticz.Debugging(2)   # Only plugin Debug() calls, no framework noise
-            
+                Domoticz.Debugging(2)  # Only plugin Debug() calls, no framework noise
+
             _logger.log("Plugin starting", DebugLevel.BASIC)
-            
+
             # Initialize translations
             _translator.load_translations(
-                DEVICE_TRANSLATIONS, 
-                SELECTOR_OPTIONS, 
-                WORKING_MODE_STATUSES
+                DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
             )
             _translator.set_language(Parameters["Mode3"])
-            
+
             # Note: command handling is wired via the module-level onCommand()
             # function (see bottom of module). DomoticzEx dispatches commands to
             # Unit, then Device, then the module, so no custom class registration
@@ -2385,16 +2668,13 @@ class LuxtronikPlugin:
             # Generate unique DeviceID for multi-instance support
             self._device_id = self._get_device_id()
             _logger.log(f"DeviceID: {self._device_id}", DebugLevel.BASIC)
-            
+
             # Initialize connection
-            self.connection = ConnectionManager(
-                Parameters['Address'],
-                int(Parameters['Port'])
-            )
-            
+            self.connection = ConnectionManager(Parameters["Address"], int(Parameters["Port"]))
+
             # Set heartbeat with validation
             try:
-                requested_heartbeat = int(Parameters['Mode2'])
+                requested_heartbeat = int(Parameters["Mode2"])
             except (ValueError, TypeError, KeyError):
                 requested_heartbeat = ConfigLimits.HEARTBEAT_DEFAULT
             heartbeat = self._validate_heartbeat(requested_heartbeat)
@@ -2405,57 +2685,61 @@ class LuxtronikPlugin:
             # Bridge live objects into context so extracted modules can access them
             # without importing plugin.py or DomoticzEx.
             import context
+
             context.logger = _logger
             context.translator = _translator
             context.heartbeat_interval = _heartbeat_interval
 
             # Configure max COP limit
-            self._configure_max_cop(Parameters.get('Mode1', '30'))
+            self._configure_max_cop(Parameters.get("Mode1", "30"))
             self._configure_pump_compensation(
-                Parameters.get('Mode4', '0'),
-                Parameters.get('Mode5', '2,60,3,140'))
+                Parameters.get("Mode4", "0"), Parameters.get("Mode5", "2,60,3,140")
+            )
 
             # Create devices (this also initializes available_writes)
             self.create_devices()
-            
+
             # Enable writes only for known safe addresses
             # These are the ONLY addresses that can be written to
             allowed_write_addresses = [addr for addr in self.available_writes.keys() if addr != -1]
             self.connection.enable_writes(allowed_write_addresses)
-            _logger.log(f"Write protection enabled for {len(allowed_write_addresses)} addresses", DebugLevel.BASIC)
-            
+            _logger.log(
+                f"Write protection enabled for {len(allowed_write_addresses)} addresses",
+                DebugLevel.BASIC,
+            )
+
             # Initial update
             self.update_all()
-            
+
             _logger.log("Plugin started successfully", DebugLevel.BASIC)
-            
+
             # Check COP logging configuration
             # Settings dictionary is populated by Domoticz plugin framework
             self._check_cop_logging_setting()
-            
+
         except ValueError as e:
-            _logger.error(f"Configuration error during plugin start", exc=e)
+            _logger.error("Configuration error during plugin start", exc=e)
         except Exception as e:
-            _logger.error(f"Plugin start failed", exc=e)
-    
+            _logger.error("Plugin start failed", exc=e)
+
     def onStop(self) -> None:
         """Clean up plugin resources."""
         global _plugin_ref, _unit_specs
-        
+
         _logger.log("Plugin stopping", DebugLevel.BASIC)
-        
+
         if self.connection:
             # Disable writes before closing
             self.connection.disable_writes()
             self.connection.close()
-        
+
         # Clear specs first so any late onCommand() won't find a spec and exits early,
         # rather than finding a spec but having no plugin reference to execute against.
         _unit_specs.clear()
         _plugin_ref = None
-        
+
         _logger.log("Plugin stopped", DebugLevel.BASIC)
-    
+
     def onHeartbeat(self) -> None:
         """Handle periodic updates."""
         _logger.log("Heartbeat triggered", DebugLevel.VERBOSE)
@@ -2514,8 +2798,7 @@ def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) ->
     try:
         # Convert command to value (Color is DomoticzEx's Hue payload)
         value = spec.write_converter.convert(
-            Command=Command, Level=Level, Hue=Color,
-            available_writes=_plugin_ref.available_writes
+            Command=Command, Level=Level, Hue=Color, available_writes=_plugin_ref.available_writes
         )
 
         # Get address from spec
@@ -2526,7 +2809,9 @@ def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) ->
         # CRITICAL SAFETY CHECK: Validate value against allowed writes
         # This protects the heat pump's EEPROM from invalid values
         if address not in _plugin_ref.available_writes:
-            _logger.error(f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})")
+            _logger.error(
+                f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})"
+            )
             return
 
         allowed_values = _plugin_ref.available_writes[address].get_val()
@@ -2538,12 +2823,13 @@ def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) ->
             )
             return
 
-        _logger.log(f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})", DebugLevel.BASIC)
+        _logger.log(
+            f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})",
+            DebugLevel.BASIC,
+        )
 
         # Execute write command
-        _plugin_ref.connection.execute_with_retry(
-            SocketCommand.WRITE_PARAMS, address, value
-        )
+        _plugin_ref.connection.execute_with_retry(SocketCommand.WRITE_PARAMS, address, value)
 
         # Update all devices to reflect the change
         _plugin_ref.update_all()

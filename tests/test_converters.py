@@ -6,6 +6,7 @@ They are offline-only: no DomoticzEx, no live Domoticz instance required.
 All converter outputs were captured from the real implementation before being
 asserted here (characterization testing, not specification testing).
 """
+
 import math
 
 import pytest
@@ -13,7 +14,6 @@ import pytest
 import context
 import converters
 from addresses import ConfigLimits
-
 
 # =============================================================================
 # Test fixtures and helpers
@@ -34,7 +34,6 @@ def ds(calc):
     for i, v in calc.items():
         arr[i] = v
     return {"READ_CALCUL": arr}
-
 
 
 # =============================================================================
@@ -104,9 +103,7 @@ class TestTempDiffConverter:
 
     def test_missing_index_returns_zero(self):
         # PINNED: returns {'sValue': '0.0'} on IndexError
-        result = converters.TempDiffConverter().convert(
-            ds({}), "READ_CALCUL", [999, 998], 10
-        )
+        result = converters.TempDiffConverter().convert(ds({}), "READ_CALCUL", [999, 998], 10)
         assert result == {"sValue": "0.0"}
 
 
@@ -132,9 +129,11 @@ class TestSteadyStateGateMixin:
 
     def _make_mixin(self):
         """Return a fresh concrete SteadyStateGateMixin instance."""
+
         class _Concrete(converters.SteadyStateGateMixin, converters.DataConverter):
             def convert(self, *a, **k):
                 return {}
+
         return _Concrete()
 
     # --- four gate states ---
@@ -307,7 +306,9 @@ class TestCOPCalculatorConverter:
         c = converters.COPCalculatorConverter()
         result, reason = c.convert(
             ds({231: 0, 237: 0, 257: 5000, 268: 1000}),
-            "READ_CALCUL", 0, [257, 268],
+            "READ_CALCUL",
+            0,
+            [257, 268],
         )
         assert result is None
         assert "idle" in reason
@@ -438,22 +439,16 @@ class TestCapacityConverter:
 
 class TestBooleanSwitchConverter:
     def test_truthy_value(self):
-        result = converters.BooleanSwitchConverter().convert(
-            ds({146: 1}), "READ_CALCUL", 146
-        )
+        result = converters.BooleanSwitchConverter().convert(ds({146: 1}), "READ_CALCUL", 146)
         assert result == {"nValue": 1, "sValue": "On"}
 
     def test_falsy_value(self):
-        result = converters.BooleanSwitchConverter().convert(
-            ds({146: 0}), "READ_CALCUL", 146
-        )
+        result = converters.BooleanSwitchConverter().convert(ds({146: 0}), "READ_CALCUL", 146)
         assert result == {"nValue": 0, "sValue": "Off"}
 
     def test_missing_index_returns_off(self):
         # PINNED: returns {'nValue': 0, 'sValue': 'Off'} on IndexError
-        result = converters.BooleanSwitchConverter().convert(
-            ds({}), "READ_CALCUL", 999
-        )
+        result = converters.BooleanSwitchConverter().convert(ds({}), "READ_CALCUL", 999)
         assert result == {"nValue": 0, "sValue": "Off"}
 
 
@@ -464,22 +459,16 @@ class TestBooleanSwitchConverter:
 
 class TestIntegerValueConverter:
     def test_integer_value(self):
-        result = converters.IntegerValueConverter().convert(
-            ds({57: 42}), "READ_CALCUL", 57
-        )
+        result = converters.IntegerValueConverter().convert(ds({57: 42}), "READ_CALCUL", 57)
         assert result == {"nValue": 0, "sValue": "42"}
 
     def test_zero_value(self):
-        result = converters.IntegerValueConverter().convert(
-            ds({57: 0}), "READ_CALCUL", 57
-        )
+        result = converters.IntegerValueConverter().convert(ds({57: 0}), "READ_CALCUL", 57)
         assert result == {"nValue": 0, "sValue": "0"}
 
     def test_missing_index_returns_zero(self):
         # PINNED: returns {'nValue': 0, 'sValue': '0'} on IndexError
-        result = converters.IntegerValueConverter().convert(
-            ds({}), "READ_CALCUL", 999
-        )
+        result = converters.IntegerValueConverter().convert(ds({}), "READ_CALCUL", 999)
         assert result == {"nValue": 0, "sValue": "0"}
 
 
@@ -491,29 +480,21 @@ class TestIntegerValueConverter:
 class TestRuntimeHoursConverter:
     def test_exact_hours(self):
         # 3600 seconds = 1 hour
-        result = converters.RuntimeHoursConverter().convert(
-            ds({56: 3600}), "READ_CALCUL", 56
-        )
+        result = converters.RuntimeHoursConverter().convert(ds({56: 3600}), "READ_CALCUL", 56)
         assert result == {"nValue": 0, "sValue": "1"}
 
     def test_fractional_hours_rounded(self):
         # 5400 seconds = 1.5 hours -> f"{1.5:.0f}" = "2" (round-half-to-even)
-        result = converters.RuntimeHoursConverter().convert(
-            ds({56: 5400}), "READ_CALCUL", 56
-        )
+        result = converters.RuntimeHoursConverter().convert(ds({56: 5400}), "READ_CALCUL", 56)
         assert result == {"nValue": 0, "sValue": "2"}
 
     def test_zero_seconds(self):
-        result = converters.RuntimeHoursConverter().convert(
-            ds({56: 0}), "READ_CALCUL", 56
-        )
+        result = converters.RuntimeHoursConverter().convert(ds({56: 0}), "READ_CALCUL", 56)
         assert result == {"nValue": 0, "sValue": "0"}
 
     def test_missing_index_returns_zero(self):
         # PINNED: returns {'nValue': 0, 'sValue': '0'} on IndexError
-        result = converters.RuntimeHoursConverter().convert(
-            ds({}), "READ_CALCUL", 999
-        )
+        result = converters.RuntimeHoursConverter().convert(ds({}), "READ_CALCUL", 999)
         assert result == {"nValue": 0, "sValue": "0"}
 
 
@@ -705,7 +686,8 @@ class TestCompressionRatioConverter:
 
     def test_idle_gated(self):
         result, reason = converters.CompressionRatioConverter().convert(
-            ds({231: 0, 237: 0}), "READ_CALCUL", [180, 181])
+            ds({231: 0, 237: 0}), "READ_CALCUL", [180, 181]
+        )
         assert result is None and reason is not None
 
     def test_steady_ratio_uses_absolute(self):
@@ -729,7 +711,8 @@ class TestDischargeHeadroomConverter:
 
     def test_idle_gated(self):
         result, reason = converters.DischargeHeadroomConverter().convert(
-            ds({231: 0, 237: 0}), "READ_CALCUL", [252, 14], 10)
+            ds({231: 0, 237: 0}), "READ_CALCUL", [252, 14], 10
+        )
         assert result is None and reason is not None
 
     def test_steady_headroom(self):
@@ -744,5 +727,6 @@ class TestDischargeHeadroomConverter:
     def test_no_passive_cooling_bypass(self):
         # Compressor off + passive-cooling flag set -> still gated (no bypass)
         result, reason = converters.DischargeHeadroomConverter().convert(
-            ds({231: 0, 237: 0, 259: 1, 252: 1150, 14: 700}), "READ_CALCUL", [252, 14], 10)
+            ds({231: 0, 237: 0, 259: 1, 252: 1150, 14: 700}), "READ_CALCUL", [252, 14], 10
+        )
         assert result is None

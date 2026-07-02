@@ -7,6 +7,7 @@ environment. We register a lightweight stub for ``DomoticzEx`` so that
 device-creation time (``Domoticz.Unit(...)``), which these tests do not
 exercise, so an empty stub is sufficient.
 """
+
 import sys
 import types
 
