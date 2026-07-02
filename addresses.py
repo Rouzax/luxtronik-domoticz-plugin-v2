@@ -75,7 +75,7 @@ class LuxtronikAddress:
     COMPRESSOR_FREQ = 231
     EVAPORATING_TEMP = 232  # Vapourisation_Temperature
     LIQUID_LINE_TEMP = 233  # TFL - Liquid refrigerant temp before expansion valve
-    CONDENSING_TEMP_CALC = 233  # calc[233] = controller's computed condensing (saturation) temp; same address, clearer name.
+    CONDENSING_TEMP_CALC = 233  # calc[233] = controller's computed condensing (saturation) temp; same address, clearer name.  # noqa: E501
     TARGET_FREQUENCY = 236  # ID_WEB_Freq_VD_Soll - controller target frequency
     COMPRESSOR_FREQ_MIN = 237  # ID_WEB_Freq_VD_Min - minimum frequency target
     COMPRESSOR_FREQ_MAX = 238  # Freq_VD_Max - maximum frequency
@@ -85,7 +85,7 @@ class LuxtronikAddress:
     HEATING_SPREAD_TARGET = 242  # HUP_Temp_Spread_Soll
     HEATING_SPREAD_ACTUAL = 243  # HUP_Temp_Spread_Ist
     CONDENSING_PRESSURE = 252  # Condensing pressure (bar/100) - from firmware
-    HOT_GAS_MAX_SETPOINT = 252  # T-HG max: hot-gas trip setpoint (~115 C on this unit); same address as CONDENSING_PRESSURE
+    HOT_GAS_MAX_SETPOINT = 252  # T-HG max: hot-gas trip setpoint (~115 C on this unit); same address as CONDENSING_PRESSURE  # noqa: E501
     HEAT_OUTPUT = 257
     CONDENSING_TEMP = 258  # Condensing temperature (°C/10) - from firmware
     PASSIVE_COOLING_FLAG = 259

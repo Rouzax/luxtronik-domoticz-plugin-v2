@@ -92,6 +92,7 @@ Author: Rouzax, 2025 (Refactored)
 </plugin>
 """
 
+import contextlib
 import socket
 import struct
 import time
@@ -581,10 +582,8 @@ class ConnectionManager:
     def close(self) -> None:
         """Close the connection."""
         if self._socket:
-            try:
+            with contextlib.suppress(Exception):
                 self._socket.close()
-            except Exception:
-                pass
             self._socket = None
 
     def _recv_exact(self, num_bytes: int) -> bytes:
@@ -2272,14 +2271,17 @@ class LuxtronikPlugin:
                 current_description = existing_unit.Description
                 new_description = _translator.get_device_description(spec.spec_id)
 
-                if current_description != new_description and new_description:
-                    if _translator.is_known_description(current_description, spec.spec_id):
-                        existing_unit.Description = new_description
-                        needs_properties_update = True
-                        _logger.log(
-                            f"Device {unit_id} (spec_id={spec.spec_id}) description updated",
-                            DebugLevel.DEVICE,
-                        )
+                if (
+                    current_description != new_description
+                    and new_description
+                    and _translator.is_known_description(current_description, spec.spec_id)
+                ):
+                    existing_unit.Description = new_description
+                    needs_properties_update = True
+                    _logger.log(
+                        f"Device {unit_id} (spec_id={spec.spec_id}) description updated",
+                        DebugLevel.DEVICE,
+                    )
 
                 # For selector switches: update LevelNames if they're known translations
                 if spec.selector_options:
@@ -2701,7 +2703,7 @@ class LuxtronikPlugin:
 
             # Enable writes only for known safe addresses
             # These are the ONLY addresses that can be written to
-            allowed_write_addresses = [addr for addr in self.available_writes.keys() if addr != -1]
+            allowed_write_addresses = [addr for addr in self.available_writes if addr != -1]
             self.connection.enable_writes(allowed_write_addresses)
             _logger.log(
                 f"Write protection enabled for {len(allowed_write_addresses)} addresses",

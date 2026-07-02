@@ -457,9 +457,11 @@ class COPCalculatorConverter(SteadyStateGateMixin, DataConverter):
                     return (None, "mode data unavailable")
 
             # Gate 2: Check for passive cooling (if applicable)
-            if len(data_list) > LuxtronikAddress.PASSIVE_COOLING_FLAG:
-                if int(data_list[LuxtronikAddress.PASSIVE_COOLING_FLAG]) == 1:
-                    return (None, "passive cooling active")
+            if (
+                len(data_list) > LuxtronikAddress.PASSIVE_COOLING_FLAG
+                and int(data_list[LuxtronikAddress.PASSIVE_COOLING_FLAG]) == 1
+            ):
+                return (None, "passive cooling active")
 
             # Gate 3: Steady-state operation check (uses mixin)
             gate_reason = self.check_steady_state(data_store)
