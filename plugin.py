@@ -129,6 +129,7 @@ from converters import (
     TextStateConverter,
     WriteConverter,
 )
+from plugin_config import read_plugin_config
 from translations import DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES, Language
 
 
@@ -1391,7 +1392,7 @@ class LuxtronikPlugin:
         changes, even if the hardware is renamed or IP address changes.
         This ensures device stability across configuration changes.
         """
-        hw_id = Parameters.get("HardwareID", "0")
+        hw_id = _parameters().get("HardwareID", "0")
         return f"luxtronikex_hw{hw_id}"
 
     def _init_available_writes(self) -> None:
@@ -2216,7 +2217,7 @@ class LuxtronikPlugin:
         for spec in specs:
             unit_id = spec.unit_id  # Use explicit unit_id, not position
             name = _translator.get_device_name(spec.spec_id)
-            full_name = f"{Parameters['Name']} - {name}"
+            full_name = f"{_parameters()['Name']} - {name}"
 
             # Store spec in module-level storage for command handling
             _unit_specs[(device_id, unit_id)] = spec
@@ -2605,11 +2606,19 @@ class LuxtronikPlugin:
         When enabled, Domoticz only logs values when they are actually received, creating
         gaps during idle periods. This gives accurate daily/monthly COP averages.
         """
+        settings = _settings()
+        if settings is None:
+            # Settings dictionary not available (older Domoticz version?)
+            _logger.log(
+                "Settings dictionary not available, skipping COP logging check", DebugLevel.VERBOSE
+            )
+            return
+
         try:
             # Settings dictionary is populated by Domoticz plugin framework
             # ShortLogAddOnlyNewValues: 1 = enabled (recommended), 0 = disabled
             # Note: Settings values are returned as strings
-            setting_value = Settings.get("ShortLogAddOnlyNewValues", "0")
+            setting_value = settings.get("ShortLogAddOnlyNewValues", "0")
 
             # Handle string comparison (Settings returns strings)
             if str(setting_value) == "1":
@@ -2624,11 +2633,6 @@ class LuxtronikPlugin:
                     "Settings → Log History → 'Only add newly received values to the Log'. "
                     "Currently disabled - stale values will be logged during idle periods."
                 )
-        except NameError:
-            # Settings dictionary not available (older Domoticz version?)
-            _logger.log(
-                "Settings dictionary not available, skipping COP logging check", DebugLevel.VERBOSE
-            )
         except Exception as e:
             # Other errors - log but don't fail
             _logger.log(f"Could not check COP logging setting: {e}", DebugLevel.VERBOSE)
@@ -2638,11 +2642,10 @@ class LuxtronikPlugin:
         global _logger, _translator, _heartbeat_interval
 
         try:
+            cfg = read_plugin_config(_parameters())
+
             # Setup debugging
-            try:
-                _logger.level = int(Parameters["Mode6"])
-            except (ValueError, TypeError, KeyError):
-                _logger.level = 0
+            _logger.level = cfg.debug_level
             if _logger.level == DebugLevel.NONE:
                 domoticz_api.set_debugging(0)  # Silence everything
             elif _logger.level == DebugLevel.ALL:
@@ -2656,7 +2659,7 @@ class LuxtronikPlugin:
             _translator.load_translations(
                 DEVICE_TRANSLATIONS, SELECTOR_OPTIONS, WORKING_MODE_STATUSES
             )
-            _translator.set_language(Parameters["Mode3"])
+            _translator.set_language(cfg.language)
 
             # Note: command handling is wired via the module-level onCommand()
             # function (see bottom of module). DomoticzEx dispatches commands to
@@ -2668,14 +2671,10 @@ class LuxtronikPlugin:
             _logger.log(f"DeviceID: {self._device_id}", DebugLevel.BASIC)
 
             # Initialize connection
-            self.connection = ConnectionManager(Parameters["Address"], int(Parameters["Port"]))
+            self.connection = ConnectionManager(cfg.address, cfg.port)
 
             # Set heartbeat with validation
-            try:
-                requested_heartbeat = int(Parameters["Mode2"])
-            except (ValueError, TypeError, KeyError):
-                requested_heartbeat = ConfigLimits.HEARTBEAT_DEFAULT
-            heartbeat = self._validate_heartbeat(requested_heartbeat)
+            heartbeat = self._validate_heartbeat(cfg.heartbeat_raw)
             domoticz_api.set_heartbeat(heartbeat)
             _heartbeat_interval = heartbeat
             _logger.log(f"Heartbeat set to {heartbeat}s", DebugLevel.BASIC)
@@ -2689,10 +2688,8 @@ class LuxtronikPlugin:
             context.heartbeat_interval = _heartbeat_interval
 
             # Configure max COP limit
-            self._configure_max_cop(Parameters.get("Mode1", "30"))
-            self._configure_pump_compensation(
-                Parameters.get("Mode4", "0"), Parameters.get("Mode5", "2,60,3,140")
-            )
+            self._configure_max_cop(cfg.max_cop_raw)
+            self._configure_pump_compensation(cfg.pump_comp_enable_raw, cfg.pump_comp_params_raw)
 
             # Create devices (this also initializes available_writes)
             self.create_devices()
@@ -2752,6 +2749,16 @@ class LuxtronikPlugin:
 def _devices():
     """The framework-injected Devices mapping (None before onStart)."""
     return globals().get("Devices")
+
+
+def _parameters() -> dict:
+    """The framework-injected Parameters mapping (empty before onStart)."""
+    return globals().get("Parameters") or {}
+
+
+def _settings():
+    """The framework-injected Settings mapping (None if unavailable)."""
+    return globals().get("Settings")
 
 
 _plugin = LuxtronikPlugin()

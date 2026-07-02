@@ -13,9 +13,7 @@ line-length = 100
 select = ["E", "F", "I", "B", "SIM"]
 # E501: plugin.py XML manifest docstring + translations.py i18n strings are exact
 #   long lines that must not wrap.
-# F821 (plugin.py): Parameters/Devices are injected by the Domoticz framework as
-#   module globals. Remove this ignore when the domoticz_api seam lands (step 2).
-per-file-ignores = { "plugin.py" = ["E501", "F821"], "translations.py" = ["E501"] }
+per-file-ignores = { "plugin.py" = ["E501"], "translations.py" = ["E501"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
