@@ -1,0 +1,33 @@
+[project]
+name = "luxtronik-domoticz-plugin"
+version = "2.1.2"
+requires-python = ">=3.11"   # extended plugin settings require a recent Domoticz (Bookworm+/3.11+)
+
+[tool.ruff]
+# UP (pyupgrade) intentionally omitted: keep the linter from proposing syntax
+# newer than the declared floor.
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "SIM"]
+# E501: plugin.py XML manifest docstring + translations.py i18n strings are exact
+#   long lines that must not wrap.
+# F821 (plugin.py): Parameters/Devices are injected by the Domoticz framework as
+#   module globals. Remove this ignore when the domoticz_api seam lands (step 2).
+per-file-ignores = { "plugin.py" = ["E501", "F821"], "translations.py" = ["E501"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=. --cov-report=term-missing"
+
+[tool.pyright]
+# Report-only for now (not wired into the blocking gate); errors worked down later.
+include = ["."]
+exclude = ["tests", "_temp", "site", "migration", "docs"]
+extraPaths = ["."]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+
+[tool.coverage.run]
+omit = ["tests/*"]
