@@ -2,7 +2,7 @@
 Luxtronik Heat Pump Controller Plugin v2 - Refactored for DomoticzEx Framework
 Author: Rouzax, 2025 (Refactored)
 
-<plugin key="luxtronikex" name="Luxtronik Heat Pump Controller v2" author="Rouzax" version="2.1.1" externallink="https://github.com/Rouzax/luxtronik-domoticz-plugin-v2">
+<plugin key="luxtronikex" name="Luxtronik Heat Pump Controller v2" author="Rouzax" version="2.1.2" externallink="https://github.com/Rouzax/luxtronik-domoticz-plugin-v2">
     <description>
         <h2>Luxtronik Heat Pump Controller Plugin</h2><br/>
         <p>This plugin connects to Luxtronik-based heat pump controllers using socket communication.</p>
@@ -730,126 +730,6 @@ class ConnectionManager:
 # 3. Each hardware instance has its own Python interpreter context
 _unit_specs: Dict[Tuple[str, int], 'DeviceSpec'] = {}  # (DeviceID, Unit) -> Spec
 _plugin_ref: Optional['LuxtronikPlugin'] = None  # Reference to plugin instance
-
-
-# =============================================================================
-# Custom Unit Class for DomoticzEx
-# =============================================================================
-class LuxtronikUnit(Domoticz.Unit):
-    """Custom Unit class with command handling.
-    
-    Uses **kwargs to pass parameters directly to parent without
-    interfering with Domoticz's TypeName auto-detection.
-    """
-    
-    def __init__(self, Name: str, DeviceID: str, Unit: int, **kwargs):
-        # Pass all kwargs directly to parent - don't override with defaults
-        # This allows TypeName='Selector Switch' to properly set Type/Subtype/Switchtype
-        super().__init__(Name, DeviceID, Unit, **kwargs)
-    
-    def onCommand(self, Command: str, Level: int, Hue: int) -> None:
-        """Handle commands sent to this unit.
-        
-        SAFETY: All writes are validated against available_writes before sending
-        to protect the heat pump's EEPROM from invalid values.
-        """
-        global _unit_specs, _plugin_ref
-        
-        # Get DeviceID from parent device
-        device_id = self.Parent.DeviceID if hasattr(self, 'Parent') and self.Parent else "luxtronik"
-        unit_id = self.Unit
-        
-        # Look up spec from module-level storage
-        spec_key = (device_id, unit_id)
-        spec = _unit_specs.get(spec_key)
-        
-        if spec:
-            _logger.log(f"Command received: spec_id={spec.spec_id}, Unit={unit_id}, Command={Command}, Level={Level}", 
-                       DebugLevel.COMMS)
-        else:
-            _logger.log(f"Command received: DeviceID={device_id}, Unit={unit_id}, Command={Command}, Level={Level}", 
-                       DebugLevel.COMMS)
-        
-        if not spec or not spec.write_converter or not _plugin_ref:
-            _logger.log(f"No write handler for unit {unit_id}", DebugLevel.COMMS)
-            return
-        
-        try:
-            # Convert command to value
-            value = spec.write_converter.convert(
-                Command=Command, Level=Level, Hue=Hue,
-                available_writes=_plugin_ref.available_writes
-            )
-            
-            # Get address from spec
-            address = spec.address
-            if isinstance(address, list):
-                address = address[0]
-            
-            # CRITICAL SAFETY CHECK: Validate value against allowed writes
-            # This protects the heat pump's EEPROM from invalid values
-            if address not in _plugin_ref.available_writes:
-                _logger.error(f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})")
-                return
-            
-            allowed_values = _plugin_ref.available_writes[address].get_val()
-            if value not in allowed_values:
-                _logger.error(
-                    f"WRITE BLOCKED: Invalid value {value} for "
-                    f"{_plugin_ref.available_writes[address].get_name()} (spec_id={spec.spec_id}). "
-                    f"Allowed values: {allowed_values}"
-                )
-                return
-            
-            _logger.log(f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})", DebugLevel.BASIC)
-            
-            # Execute write command
-            _plugin_ref.connection.execute_with_retry(
-                SocketCommand.WRITE_PARAMS, address, value
-            )
-            
-            # Update all devices to reflect the change
-            _plugin_ref.update_all()
-            
-        except Exception as e:
-            _logger.error(f"Error processing command for spec_id={spec.spec_id}", exc=e)
-    
-    def onDeviceAdded(self) -> None:
-        """Called when device is added externally."""
-        _logger.log(f"Unit added: {self.Name}", DebugLevel.DEVICE)
-    
-    def onDeviceModified(self) -> None:
-        """Called when device is modified externally."""
-        _logger.log(f"Unit modified: {self.Name}", DebugLevel.DEVICE)
-    
-    def onDeviceRemoved(self) -> None:
-        """Called when device is removed externally."""
-        _logger.log(f"Unit removed: {self.Name}", DebugLevel.DEVICE)
-
-
-# =============================================================================
-# Custom Device Class for DomoticzEx
-# =============================================================================
-class LuxtronikDevice(Domoticz.Device):
-    """Custom Device class for grouping units."""
-    
-    def __init__(self, DeviceID: str):
-        super().__init__(DeviceID)
-    
-    def onCommand(self, Unit: int, Command: str, Level: int, Hue: int) -> None:
-        """Handle commands at device level - delegate to unit."""
-        if Unit in self.Units:
-            unit = self.Units[Unit]
-            if hasattr(unit, 'onCommand'):
-                unit.onCommand(Command, Level, Hue)
-
-
-# =============================================================================
-# Register custom Device and Unit classes with DomoticzEx
-# IMPORTANT: This MUST be at module level (not inside onStart) so that
-# existing devices are loaded using the custom classes with their callbacks
-# =============================================================================
-Domoticz.Register(Device=LuxtronikDevice, Unit=LuxtronikUnit)
 
 
 # =============================================================================
@@ -2100,7 +1980,7 @@ class LuxtronikPlugin:
             # Check if device exists
             if device_id not in Devices or unit_id not in Devices[device_id].Units:
                 # Create new unit
-                unit = LuxtronikUnit(
+                unit = Domoticz.Unit(
                     Name=full_name,
                     DeviceID=device_id,
                     Unit=unit_id,
@@ -2497,9 +2377,11 @@ class LuxtronikPlugin:
             )
             _translator.set_language(Parameters["Mode3"])
             
-            # Note: Domoticz.Register() is now at module level to ensure
-            # existing devices use our custom classes with callback support
-            
+            # Note: command handling is wired via the module-level onCommand()
+            # function (see bottom of module). DomoticzEx dispatches commands to
+            # Unit, then Device, then the module, so no custom class registration
+            # is needed and it works reliably across plugin hot-reloads.
+
             # Generate unique DeviceID for multi-instance support
             self._device_id = self._get_device_id()
             _logger.log(f"DeviceID: {self._device_id}", DebugLevel.BASIC)
@@ -2596,3 +2478,75 @@ def onStop():
 
 def onHeartbeat():
     _plugin.onHeartbeat()
+
+
+def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) -> None:
+    """Handle a command sent to one of the plugin's units.
+
+    DomoticzEx dispatches commands to the Unit object, then the Device object,
+    then this module-level function, in that order. Because the plugin uses the
+    base DomoticzEx.Unit/Device classes (no custom subclass registration), the
+    dispatch always falls through to here, which works reliably across plugin
+    hot-reloads.
+
+    SAFETY: All writes are validated against available_writes before sending to
+    protect the heat pump's EEPROM from invalid values.
+    """
+    global _unit_specs, _plugin_ref
+
+    spec = _unit_specs.get((DeviceID, Unit))
+
+    if spec:
+        _logger.log(
+            f"Command received: spec_id={spec.spec_id}, Unit={Unit}, Command={Command}, Level={Level}",
+            DebugLevel.COMMS,
+        )
+    else:
+        _logger.log(
+            f"Command received: DeviceID={DeviceID}, Unit={Unit}, Command={Command}, Level={Level}",
+            DebugLevel.COMMS,
+        )
+
+    if not spec or not spec.write_converter or not _plugin_ref:
+        _logger.log(f"No write handler for unit {Unit}", DebugLevel.COMMS)
+        return
+
+    try:
+        # Convert command to value (Color is DomoticzEx's Hue payload)
+        value = spec.write_converter.convert(
+            Command=Command, Level=Level, Hue=Color,
+            available_writes=_plugin_ref.available_writes
+        )
+
+        # Get address from spec
+        address = spec.address
+        if isinstance(address, list):
+            address = address[0]
+
+        # CRITICAL SAFETY CHECK: Validate value against allowed writes
+        # This protects the heat pump's EEPROM from invalid values
+        if address not in _plugin_ref.available_writes:
+            _logger.error(f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})")
+            return
+
+        allowed_values = _plugin_ref.available_writes[address].get_val()
+        if value not in allowed_values:
+            _logger.error(
+                f"WRITE BLOCKED: Invalid value {value} for "
+                f"{_plugin_ref.available_writes[address].get_name()} (spec_id={spec.spec_id}). "
+                f"Allowed values: {allowed_values}"
+            )
+            return
+
+        _logger.log(f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})", DebugLevel.BASIC)
+
+        # Execute write command
+        _plugin_ref.connection.execute_with_retry(
+            SocketCommand.WRITE_PARAMS, address, value
+        )
+
+        # Update all devices to reflect the change
+        _plugin_ref.update_all()
+
+    except Exception as e:
+        _logger.error(f"Error processing command for spec_id={spec.spec_id}", exc=e)
