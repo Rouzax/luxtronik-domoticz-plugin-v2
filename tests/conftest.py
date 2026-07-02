@@ -10,6 +10,12 @@ exercise, so an empty stub is sufficient.
 
 import sys
 import types
+from pathlib import Path
+
+# Add parent directory to sys.path so tests can import plugin modules.
+_plugin_root = Path(__file__).parent.parent
+if str(_plugin_root) not in sys.path:
+    sys.path.insert(0, str(_plugin_root))
 
 if "DomoticzEx" not in sys.modules:
     _stub = types.ModuleType("DomoticzEx")

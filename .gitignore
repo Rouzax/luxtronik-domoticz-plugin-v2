@@ -12,6 +12,12 @@ _temp/
 # Python
 __pycache__/
 *.py[cod]
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Claude-generated design specs / implementation plans (local-only)
+docs/superpowers/
 
 # Worktrees
 .worktrees/
