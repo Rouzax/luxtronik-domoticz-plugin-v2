@@ -95,6 +95,7 @@ Author: Rouzax, 2025 (Refactored)
 from typing import Any, Dict, Optional, Tuple
 
 import domoticz_api
+import name_ownership
 from addresses import ConfigLimits, LuxtronikAddress, SocketCommand
 from connection import ConnectionManager
 from context import DebugLevel
@@ -153,6 +154,9 @@ class LuxtronikPlugin:
         self._device_id: str = ""  # Will be set during onStart
         self._pump_compensation_enabled: bool = False
         self._pump_power_ranges: Optional[Dict[str, float]] = None
+        self._auto_names: dict = {}
+        self._migrating: bool = False
+        self._state_dirty: bool = False
 
     def _get_device_id(self) -> str:
         """Generate stable DeviceID based on HardwareID.
@@ -196,6 +200,7 @@ class LuxtronikPlugin:
         global _unit_specs, _plugin_ref
 
         _logger.log("Creating devices", DebugLevel.BASIC)
+        self._state_dirty = False
 
         # Store reference to plugin for command handling
         _plugin_ref = self
@@ -232,55 +237,76 @@ class LuxtronikPlugin:
                 spec.device_params["Description"] = description
 
             # Check if device exists
+            k = name_ownership.key(device_id, unit_id)
+
             if not domoticz_api.unit_exists(_devices(), device_id, unit_id):
-                # Create new unit
+                # Create new unit and claim everything we just wrote.
                 domoticz_api.create_unit(device_id, unit_id, full_name, spec.device_params)
+                name_ownership.claim(self._auto_names, k, "name", full_name)
+                created_desc = spec.device_params.get("Description")
+                if created_desc:
+                    name_ownership.claim(self._auto_names, k, "description", created_desc)
+                if spec.selector_options:
+                    name_ownership.claim(
+                        self._auto_names,
+                        k,
+                        "options",
+                        _translator.translate_selector_options(spec.selector_options),
+                    )
+                self._state_dirty = True
                 _logger.log(
                     f"Created device {unit_id} (spec_id={spec.spec_id}): {name}", DebugLevel.DEVICE
                 )
             else:
-                # Device exists - check if it should be updated
                 existing_unit = domoticz_api.get_unit(_devices(), device_id, unit_id)
-                current_name = existing_unit.Name
                 needs_options_update = False
                 needs_properties_update = False
 
-                # Smart rename: only rename if current name's translation part
-                # matches a known translation (not user-customized)
-                # Device names have format: "{HardwareName} - {TranslatedName}"
-                if current_name != full_name:
-                    # Extract the translation part (after " - ")
-                    if " - " in current_name:
-                        translation_part = current_name.split(" - ", 1)[1]
-                    else:
-                        translation_part = current_name
-
-                    # Check if translation part is a known translation
-                    if _translator.is_known_device_name(translation_part, spec.spec_id):
+                # --- Name (provenance-owned) ---
+                current_name = existing_unit.Name
+                name_part = (
+                    current_name.split(" - ", 1)[1] if " - " in current_name else current_name
+                )
+                name_heuristic = _translator.is_known_device_name(name_part, spec.spec_id)
+                if name_ownership.is_owned(
+                    self._auto_names, k, "name", current_name, name_heuristic, self._migrating
+                ):
+                    if current_name != full_name:
                         existing_unit.Name = full_name
                         needs_properties_update = True
                         _logger.log(
                             f"Device {unit_id} (spec_id={spec.spec_id}) renamed: {current_name} -> {full_name}",
                             DebugLevel.DEVICE,
                         )
+                    name_ownership.claim(self._auto_names, k, "name", full_name)
+                    self._state_dirty = True
 
-                # Update description if it's a known translation
-                current_description = existing_unit.Description
+                # --- Description (provenance-owned) ---
                 new_description = _translator.get_device_description(spec.spec_id)
-
-                if (
-                    current_description != new_description
-                    and new_description
-                    and _translator.is_known_description(current_description, spec.spec_id)
-                ):
-                    existing_unit.Description = new_description
-                    needs_properties_update = True
-                    _logger.log(
-                        f"Device {unit_id} (spec_id={spec.spec_id}) description updated",
-                        DebugLevel.DEVICE,
+                if new_description:
+                    current_description = existing_unit.Description
+                    desc_heuristic = _translator.is_known_description(
+                        current_description, spec.spec_id
                     )
+                    if name_ownership.is_owned(
+                        self._auto_names,
+                        k,
+                        "description",
+                        current_description,
+                        desc_heuristic,
+                        self._migrating,
+                    ):
+                        if current_description != new_description:
+                            existing_unit.Description = new_description
+                            needs_properties_update = True
+                            _logger.log(
+                                f"Device {unit_id} (spec_id={spec.spec_id}) description updated",
+                                DebugLevel.DEVICE,
+                            )
+                        name_ownership.claim(self._auto_names, k, "description", new_description)
+                        self._state_dirty = True
 
-                # For selector switches: update LevelNames if they're known translations
+                # --- Selector options (provenance-owned) ---
                 if spec.selector_options:
                     current_options = existing_unit.Options
                     if "LevelNames" in current_options:
@@ -288,18 +314,22 @@ class LuxtronikPlugin:
                         new_level_names = _translator.translate_selector_options(
                             spec.selector_options
                         )
-
-                        if current_level_names != new_level_names:
-                            # Check if current options are known translations
-                            current_items = current_level_names.split("|")
-                            all_known = all(
-                                _translator.is_known_selector_option(item, opt_key)
-                                for item, opt_key in zip(
-                                    current_items, spec.selector_options, strict=False
-                                )
+                        current_items = current_level_names.split("|")
+                        opts_heuristic = all(
+                            _translator.is_known_selector_option(item, opt_key)
+                            for item, opt_key in zip(
+                                current_items, spec.selector_options, strict=False
                             )
-
-                            if all_known:
+                        )
+                        if name_ownership.is_owned(
+                            self._auto_names,
+                            k,
+                            "options",
+                            current_level_names,
+                            opts_heuristic,
+                            self._migrating,
+                        ):
+                            if current_level_names != new_level_names:
                                 existing_unit.Options = {
                                     **current_options,
                                     "LevelNames": new_level_names,
@@ -309,6 +339,8 @@ class LuxtronikPlugin:
                                     f"Device {unit_id} (spec_id={spec.spec_id}) selector options updated",
                                     DebugLevel.DEVICE,
                                 )
+                            name_ownership.claim(self._auto_names, k, "options", new_level_names)
+                            self._state_dirty = True
 
                 if needs_properties_update or needs_options_update:
                     # DomoticzEx requires UpdateProperties=True to update Name/Description
@@ -698,7 +730,12 @@ class LuxtronikPlugin:
             self._configure_pump_compensation(cfg.pump_comp_enable_raw, cfg.pump_comp_params_raw)
 
             # Create devices (this also initializes available_writes)
+            blob = domoticz_api.load_state()
+            self._migrating = blob is None
+            self._auto_names = (blob or {}).get("auto_names", {})
             self.create_devices()
+            if self._state_dirty:
+                domoticz_api.save_state({"v": 1, "auto_names": self._auto_names})
 
             # Enable writes only for known safe addresses
             # These are the ONLY addresses that can be written to
