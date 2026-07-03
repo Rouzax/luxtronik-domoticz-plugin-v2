@@ -44,6 +44,9 @@ class _NullLogger:
     def error(self, *a, **k) -> None:
         pass
 
+    def warning(self, *a, **k) -> None:
+        pass
+
 
 class _PassthroughTranslator:
     """Drop-in translator used before onStart wires in the real TranslationManager."""
