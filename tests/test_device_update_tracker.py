@@ -16,10 +16,11 @@ def test_nvalue_change_detected():
 
 
 def test_svalue_formatting_not_a_change():
-    # Use a non-graphing type (244): a graphing device with no formatting
-    # change still reports "Next update in Ns" (periodic-refresh branch),
-    # never "No changes". The plain "No changes" reason is only reachable
-    # for non-graphing devices, so that is what this test exercises.
+    # Use a non-graphing type (244): a graphing device with no value change
+    # falls into the periodic-refresh branch ("Interval update" on the first
+    # call, then "Next update in Ns"), never "No changes". The plain
+    # "No changes" reason is only reachable for non-graphing devices, which is
+    # what this test exercises.
     t = DeviceUpdateTracker()
     changed, reason, _ = t.needs_update(FakeUnit(type_=244, svalue="23.40"), {"sValue": "23.4"})
     assert not changed and reason == "No changes"

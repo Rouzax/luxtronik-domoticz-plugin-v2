@@ -26,6 +26,10 @@ jobs:
           [[ "$TAG" =~ ^v[0-9A-Za-z.+-]+$ ]] || { echo "unexpected tag: $TAG" >&2; exit 1; }
           PKG="luxtronikex"
           mkdir -p "$PKG"
+          # Ships every root-level *.py so new runtime modules are picked up
+          # automatically. INVARIANT: repo-root *.py must stay runtime-only
+          # (dev-only Python lives under tests/ or is non-.py); otherwise it
+          # would leak into the release zip and the dist branch.
           cp *.py README.md "$PKG/"
           zip -r "${PKG}-${TAG}.zip" "$PKG"
           unzip -l "${PKG}-${TAG}.zip"
