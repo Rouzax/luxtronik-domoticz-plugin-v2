@@ -8,7 +8,7 @@ the caller, because Domoticz injects Parameters/Devices/Settings into the plugin
 entry module's namespace, not into this module.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 import DomoticzEx as Domoticz
 
@@ -45,3 +45,17 @@ def create_unit(device_id: str, unit_id: int, name: str, params: dict) -> Any:
 
 def get_unit(devices, device_id: str, unit_id: int) -> Any:
     return devices[device_id].Units[unit_id]
+
+
+def load_state() -> Optional[dict]:
+    """Return the persisted plugin state blob, or None if never saved / unreadable."""
+    try:
+        cfg = Domoticz.Configuration()
+    except Exception:
+        return None
+    return cfg or None
+
+
+def save_state(state: dict) -> None:
+    """Persist the plugin state blob via Domoticz.Configuration()."""
+    Domoticz.Configuration(state)

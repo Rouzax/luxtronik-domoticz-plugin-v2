@@ -34,3 +34,10 @@ def test_unit_exists_false_when_absent():
     assert domoticz_api.unit_exists(stub.Devices, "nope", 1) is False
     domoticz_api.create_unit("dev1", 5, "Name", {})
     assert domoticz_api.unit_exists(stub.Devices, "dev1", 6) is False
+
+
+def test_state_roundtrip():
+    stub.reset()
+    assert domoticz_api.load_state() is None
+    domoticz_api.save_state({"v": 1, "auto_names": {"d:1": {"name": "N"}}})
+    assert domoticz_api.load_state() == {"v": 1, "auto_names": {"d:1": {"name": "N"}}}

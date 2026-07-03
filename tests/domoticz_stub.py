@@ -7,12 +7,22 @@ A fuller stub (onStart/onHeartbeat integration) is deferred to refactor step 4.
 
 calls = {"status": [], "debug": [], "error": [], "debugging": [], "heartbeat": []}
 Devices = {}
+_config: dict = {}
+
+
+def Configuration(values=None):
+    """Fake of DomoticzEx Configuration(): read with no arg, write with a dict."""
+    global _config
+    if values is not None:
+        _config = dict(values)
+    return dict(_config)
 
 
 def reset():
     for v in calls.values():
         v.clear()
     Devices.clear()
+    _config.clear()
 
 
 class _Device:
