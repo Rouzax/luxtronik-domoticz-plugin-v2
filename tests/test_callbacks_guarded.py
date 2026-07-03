@@ -30,3 +30,14 @@ def test_start_and_stop_errors_are_caught(monkeypatch):
     plugin.onStop()
     assert any("start boom" in m for m in stub.calls["error"])
     assert any("stop boom" in m for m in stub.calls["error"])
+
+
+def test_oncommand_error_is_caught_and_logged(monkeypatch):
+    class _RaisingSpecs:
+        def get(self, *a, **k):
+            raise RuntimeError("cmd boom")
+
+    monkeypatch.setattr(plugin, "_unit_specs", _RaisingSpecs())
+    plugin.onCommand("dev1", 1, "On", 0, "")  # must NOT raise
+    assert any("cmd boom" in m for m in stub.calls["error"])
+    assert any("onCommand failed" in m for m in stub.calls["error"])
