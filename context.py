@@ -54,6 +54,9 @@ class _PassthroughTranslator:
     def get_working_mode_status(self, key: str) -> str:
         return key
 
+    def translate_selector_options(self, options: list) -> str:
+        return "|".join(options)
+
 
 # Module-level state: replaced by plugin.onStart() with live objects.
 logger: _NullLogger = _NullLogger()
