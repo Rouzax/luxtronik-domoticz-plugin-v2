@@ -19,6 +19,7 @@ import pytest
 import plugin
 from addresses import LuxtronikAddress, SocketCommand
 from converters import CommandToNumberConverter
+from device_spec import DeviceSpec, Field
 
 DEVICE_ID = "luxtronikex_hw18"
 UNIT = 21
@@ -42,15 +43,13 @@ def _isolate_module_state():
 def _make_plugin_ref(allowed_values):
     """Build a fake plugin instance exposing the surface onCommand touches."""
     ref = MagicMock()
-    ref.available_writes = {
-        LuxtronikAddress.COOLING_ENABLED: plugin.Field("Cooling", allowed_values)
-    }
+    ref.available_writes = {LuxtronikAddress.COOLING_ENABLED: Field("Cooling", allowed_values)}
     return ref
 
 
 def _register_spec(address=LuxtronikAddress.COOLING_ENABLED):
     """Register a writable selector spec for (DEVICE_ID, UNIT)."""
-    spec = plugin.DeviceSpec(
+    spec = DeviceSpec(
         unit_id=UNIT,
         spec_id="cooling_enabled",
         command="READ_PARAMS",
