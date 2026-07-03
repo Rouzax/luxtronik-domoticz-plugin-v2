@@ -1,6 +1,6 @@
 name: Release plugin zip
 
-# Builds a clean, runtime-only zip (the 5 Python modules + README) and attaches it
+# Builds a clean, runtime-only zip (all root-level Python modules + README) and attaches it
 # to the GitHub Release, so users can install without the docs/tests/site cruft.
 on:
   release:
@@ -26,7 +26,7 @@ jobs:
           [[ "$TAG" =~ ^v[0-9A-Za-z.+-]+$ ]] || { echo "unexpected tag: $TAG" >&2; exit 1; }
           PKG="luxtronikex"
           mkdir -p "$PKG"
-          cp plugin.py translations.py addresses.py context.py converters.py README.md "$PKG/"
+          cp *.py README.md "$PKG/"
           zip -r "${PKG}-${TAG}.zip" "$PKG"
           unzip -l "${PKG}-${TAG}.zip"
 
@@ -37,7 +37,7 @@ jobs:
         run: gh release upload "$TAG" "luxtronikex-${TAG}.zip" --clobber
 
   sync-dist:
-    # Maintain a runtime-only `dist` branch (5 modules + README) with linear history,
+    # Maintain a runtime-only `dist` branch (all root-level Python modules + README) with linear history,
     # so git-clone and plugin-manager installs that track `dist` stay clean and updatable.
     runs-on: ubuntu-latest
     steps:
@@ -56,7 +56,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           snapshot="$(mktemp -d)"
-          cp plugin.py translations.py addresses.py context.py converters.py README.md "$snapshot/"
+          cp *.py README.md "$snapshot/"
           if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
             git fetch origin dist
             git checkout dist
@@ -65,7 +65,7 @@ jobs:
           fi
           git rm -rfq . >/dev/null 2>&1 || true
           cp "$snapshot"/* .
-          git add -- plugin.py translations.py addresses.py context.py converters.py README.md
+          git add -- *.py README.md
           if git diff --cached --quiet; then
             echo "dist already up to date for $TAG"
             exit 0
