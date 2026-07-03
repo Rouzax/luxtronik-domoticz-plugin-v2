@@ -65,7 +65,7 @@ class LuxtronikAddress:
     HEATING_FLOW = 155  # ID_WEB_WMZ_Durchfluss - heating circuit flow (L/h)
     SOURCE_FLOW = 173  # ID_WEB_Durchfluss_WQ - source/brine circuit flow (L/h)
     SUCTION_TEMP = 176
-    DISCHARGE_TEMP = 177  # ID_WEB_LIN_VDH - discharge line temp
+    COMPRESSOR_HEATING_TEMP = 177  # ID_WEB_LIN_VDH - compressor-body heating, not discharge gas
     SUPERHEAT = 178
     HIGH_PRESSURE = 180
     LOW_PRESSURE = 181
@@ -87,7 +87,6 @@ class LuxtronikAddress:
     CONDENSING_PRESSURE = 252  # Condensing pressure (bar/100) - from firmware
     HOT_GAS_MAX_SETPOINT = 252  # T-HG max: hot-gas trip setpoint (~115 C on this unit); same address as CONDENSING_PRESSURE  # noqa: E501
     HEAT_OUTPUT = 257
-    CONDENSING_TEMP = 258  # Condensing temperature (°C/10) - from firmware
     PASSIVE_COOLING_FLAG = 259
     COOLING_RELEASE_TIMER = 260  # Cooling release countdown timer (seconds)
     POWER_TOTAL = 268

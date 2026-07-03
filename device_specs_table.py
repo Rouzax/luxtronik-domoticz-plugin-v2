@@ -566,7 +566,7 @@ def build_device_specs() -> List[DeviceSpec]:
             162,
             "compressor_heating_temp",
             "READ_CALCUL",
-            LuxtronikAddress.DISCHARGE_TEMP,
+            LuxtronikAddress.COMPRESSOR_HEATING_TEMP,
             used=1,
         ),
         # Unit 163: Evaporating temperature (refrigerant evaporation point)
