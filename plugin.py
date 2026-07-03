@@ -2765,15 +2765,24 @@ _plugin = LuxtronikPlugin()
 
 
 def onStart():
-    _plugin.onStart()
+    try:
+        _plugin.onStart()
+    except Exception as e:
+        domoticz_api.log_error(f"onStart failed ({type(e).__name__}: {e})")
 
 
 def onStop():
-    _plugin.onStop()
+    try:
+        _plugin.onStop()
+    except Exception as e:
+        domoticz_api.log_error(f"onStop failed ({type(e).__name__}: {e})")
 
 
 def onHeartbeat():
-    _plugin.onHeartbeat()
+    try:
+        _plugin.onHeartbeat()
+    except Exception as e:
+        domoticz_api.log_error(f"onHeartbeat failed ({type(e).__name__}: {e})")
 
 
 def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) -> None:
@@ -2788,63 +2797,69 @@ def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) ->
     SAFETY: All writes are validated against available_writes before sending to
     protect the heat pump's EEPROM from invalid values.
     """
-    global _unit_specs, _plugin_ref
-
-    spec = _unit_specs.get((DeviceID, Unit))
-
-    if spec:
-        _logger.log(
-            f"Command received: spec_id={spec.spec_id}, Unit={Unit}, Command={Command}, Level={Level}",
-            DebugLevel.COMMS,
-        )
-    else:
-        _logger.log(
-            f"Command received: DeviceID={DeviceID}, Unit={Unit}, Command={Command}, Level={Level}",
-            DebugLevel.COMMS,
-        )
-
-    if not spec or not spec.write_converter or not _plugin_ref:
-        _logger.log(f"No write handler for unit {Unit}", DebugLevel.COMMS)
-        return
-
     try:
-        # Convert command to value (Color is DomoticzEx's Hue payload)
-        value = spec.write_converter.convert(
-            Command=Command, Level=Level, Hue=Color, available_writes=_plugin_ref.available_writes
-        )
+        global _unit_specs, _plugin_ref
 
-        # Get address from spec
-        address = spec.address
-        if isinstance(address, list):
-            address = address[0]
+        spec = _unit_specs.get((DeviceID, Unit))
 
-        # CRITICAL SAFETY CHECK: Validate value against allowed writes
-        # This protects the heat pump's EEPROM from invalid values
-        if address not in _plugin_ref.available_writes:
-            _logger.error(
-                f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})"
+        if spec:
+            _logger.log(
+                f"Command received: spec_id={spec.spec_id}, Unit={Unit}, Command={Command}, Level={Level}",
+                DebugLevel.COMMS,
             )
+        else:
+            _logger.log(
+                f"Command received: DeviceID={DeviceID}, Unit={Unit}, Command={Command}, Level={Level}",
+                DebugLevel.COMMS,
+            )
+
+        if not spec or not spec.write_converter or not _plugin_ref:
+            _logger.log(f"No write handler for unit {Unit}", DebugLevel.COMMS)
             return
 
-        allowed_values = _plugin_ref.available_writes[address].get_val()
-        if value not in allowed_values:
-            _logger.error(
-                f"WRITE BLOCKED: Invalid value {value} for "
-                f"{_plugin_ref.available_writes[address].get_name()} (spec_id={spec.spec_id}). "
-                f"Allowed values: {allowed_values}"
+        try:
+            # Convert command to value (Color is DomoticzEx's Hue payload)
+            value = spec.write_converter.convert(
+                Command=Command,
+                Level=Level,
+                Hue=Color,
+                available_writes=_plugin_ref.available_writes,
             )
-            return
 
-        _logger.log(
-            f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})",
-            DebugLevel.BASIC,
-        )
+            # Get address from spec
+            address = spec.address
+            if isinstance(address, list):
+                address = address[0]
 
-        # Execute write command
-        _plugin_ref.connection.execute_with_retry(SocketCommand.WRITE_PARAMS, address, value)
+            # CRITICAL SAFETY CHECK: Validate value against allowed writes
+            # This protects the heat pump's EEPROM from invalid values
+            if address not in _plugin_ref.available_writes:
+                _logger.error(
+                    f"WRITE BLOCKED: Address {address} not in available_writes (spec_id={spec.spec_id})"
+                )
+                return
 
-        # Update all devices to reflect the change
-        _plugin_ref.update_all()
+            allowed_values = _plugin_ref.available_writes[address].get_val()
+            if value not in allowed_values:
+                _logger.error(
+                    f"WRITE BLOCKED: Invalid value {value} for "
+                    f"{_plugin_ref.available_writes[address].get_name()} (spec_id={spec.spec_id}). "
+                    f"Allowed values: {allowed_values}"
+                )
+                return
 
+            _logger.log(
+                f"Writing validated value {value} to address {address} (spec_id={spec.spec_id})",
+                DebugLevel.BASIC,
+            )
+
+            # Execute write command
+            _plugin_ref.connection.execute_with_retry(SocketCommand.WRITE_PARAMS, address, value)
+
+            # Update all devices to reflect the change
+            _plugin_ref.update_all()
+
+        except Exception as e:
+            _logger.error(f"Error processing command for spec_id={spec.spec_id}", exc=e)
     except Exception as e:
-        _logger.error(f"Error processing command for spec_id={spec.spec_id}", exc=e)
+        domoticz_api.log_error(f"onCommand failed ({type(e).__name__}: {e})")
