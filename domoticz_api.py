@@ -8,6 +8,8 @@ the caller, because Domoticz injects Parameters/Devices/Settings into the plugin
 entry module's namespace, not into this module.
 """
 
+from typing import Any
+
 import DomoticzEx as Domoticz
 
 
@@ -35,11 +37,11 @@ def unit_exists(devices, device_id: str, unit_id: int) -> bool:
     return device_id in devices and unit_id in devices[device_id].Units
 
 
-def create_unit(device_id: str, unit_id: int, name: str, params: dict) -> object:
+def create_unit(device_id: str, unit_id: int, name: str, params: dict) -> Any:
     unit = Domoticz.Unit(Name=name, DeviceID=device_id, Unit=unit_id, **params)
     unit.Create()
     return unit
 
 
-def get_unit(devices, device_id: str, unit_id: int) -> object:
+def get_unit(devices, device_id: str, unit_id: int) -> Any:
     return devices[device_id].Units[unit_id]

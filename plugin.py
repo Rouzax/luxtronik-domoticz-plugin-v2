@@ -1202,6 +1202,7 @@ class LuxtronikPlugin:
 
         # Phase 1: Fetch all command data on a single connection
         batch = [(code, 0, 0) for code in command_codes.values()]
+        assert self.connection is not None  # set in onStart before any update runs
         batch_results = self.connection.execute_batch_with_retry(batch)
 
         data_store: DataStore = {}
@@ -1350,7 +1351,9 @@ class LuxtronikPlugin:
             vbo_power = self._estimate_pump_power(vbo_speed, ranges["vbo_min"], ranges["vbo_max"])
 
             total_power = compressor_power + hup_power + vbo_power
-            calc_data[LuxtronikAddress.POWER_TOTAL] = total_power
+            # Intentional float into the int calc list: compensated power carries
+            # sub-watt precision that InstantPowerConverter reads back as a float.
+            calc_data[LuxtronikAddress.POWER_TOTAL] = total_power  # type: ignore[assignment]
 
             _logger.log(
                 f"Pump compensation: compressor={compressor_power:.0f}W + "
@@ -1625,6 +1628,7 @@ def onCommand(DeviceID: str, Unit: int, Command: str, Level: int, Color: str) ->
             )
 
             # Execute write command
+            assert _plugin_ref.connection is not None  # set in onStart before commands dispatch
             _plugin_ref.connection.execute_with_retry(SocketCommand.WRITE_PARAMS, address, value)
 
             # Update all devices to reflect the change

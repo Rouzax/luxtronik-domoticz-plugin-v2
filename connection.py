@@ -86,6 +86,7 @@ class ConnectionManager:
             socket.error: If the connection is closed before all bytes arrive
         """
         data = b""
+        assert self._socket is not None  # _recv_exact is only called on an open connection
         while len(data) < num_bytes:
             chunk = self._socket.recv(num_bytes - len(data))
             if not chunk:

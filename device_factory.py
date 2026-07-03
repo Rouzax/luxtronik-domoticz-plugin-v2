@@ -318,7 +318,7 @@ class DeviceFactory:
                           If None, no mode filtering is applied (total COP)
         """
         # Build config list: [heat_idx, power_idx] or [heat_idx, power_idx, allowed_modes]
-        config = [heat_idx, power_idx]
+        config: list = [heat_idx, power_idx]
         if allowed_modes is not None:
             config.append(allowed_modes)
 

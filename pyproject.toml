@@ -17,10 +17,13 @@ per-file-ignores = { "plugin.py" = ["E501"], "translations.py" = ["E501"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=. --cov-report=term-missing"
+# --cov-fail-under floor: current coverage is ~56%; keep 1% slack. Ratchet up as
+# coverage grows (raise the floor in the same change that earns the gain).
+addopts = "-q --cov=. --cov-report=term-missing --cov-fail-under=55"
 
 [tool.pyright]
-# Report-only for now (not wired into the blocking gate); errors worked down later.
+# Blocking gate: pre-commit runs pyright and it is green (0 errors). Kept at
+# typeCheckingMode = "basic"; promote toward stricter modes gradually.
 include = ["."]
 exclude = ["tests", "_temp", "site", "migration", "docs"]
 extraPaths = ["."]
