@@ -734,6 +734,10 @@ class LuxtronikPlugin:
             self._migrating = blob is None
             self._auto_names = (blob or {}).get("auto_names", {})
             self.create_devices()
+            # Persist provenance only when something was claimed or changed this run.
+            # An install whose devices are all user-renamed claims nothing, leaves
+            # _state_dirty False, writes no blob, and stays migrating on the next
+            # onStart -- a harmless no-op, since there is nothing owned to reconcile.
             if self._state_dirty:
                 domoticz_api.save_state({"v": 1, "auto_names": self._auto_names})
 

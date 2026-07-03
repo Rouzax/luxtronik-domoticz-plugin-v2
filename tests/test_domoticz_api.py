@@ -41,3 +41,13 @@ def test_state_roundtrip():
     assert domoticz_api.load_state() is None
     domoticz_api.save_state({"v": 1, "auto_names": {"d:1": {"name": "N"}}})
     assert domoticz_api.load_state() == {"v": 1, "auto_names": {"d:1": {"name": "N"}}}
+
+
+def test_load_state_returns_none_when_configuration_raises(monkeypatch):
+    stub.reset()
+
+    def boom():
+        raise RuntimeError("configuration unreadable")
+
+    monkeypatch.setattr(domoticz_api.Domoticz, "Configuration", boom)
+    assert domoticz_api.load_state() is None

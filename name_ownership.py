@@ -23,7 +23,7 @@ def is_owned(
     entry = auto_names.get(k)
     if entry is not None and attr in entry:
         return current == entry[attr]
-    return bool(migrating and heuristic_result)
+    return migrating and heuristic_result
 
 
 def claim(auto_names: dict, k: str, attr: str, value: str) -> None:
