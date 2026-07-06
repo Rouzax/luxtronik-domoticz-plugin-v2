@@ -1,7 +1,9 @@
 """Shared runtime state and the DebugLevel enum, for modules that must not import
 plugin.py or DomoticzEx. plugin.onStart() replaces logger/translator/heartbeat
 with the live objects; the defaults keep converters importable offline (tests inject stubs)."""
+
 from enum import IntFlag
+
 from addresses import ConfigLimits
 
 
@@ -19,12 +21,13 @@ class DebugLevel(IntFlag):
         VERBOSE (8): Tracker details, data conversion -> Debug()
         ALL (-1):    Everything
     """
+
     NONE = 0
-    BASIC = 1       # Lifecycle, summaries, write confirmations
-    DEVICE = 2      # Device updates (changes only)
-    COMMS = 4       # Connections, protocol, commands
-    VERBOSE = 8     # Tracker details, data conversion
-    ALL = -1        # All debugging enabled
+    BASIC = 1  # Lifecycle, summaries, write confirmations
+    DEVICE = 2  # Device updates (changes only)
+    COMMS = 4  # Connections, protocol, commands
+    VERBOSE = 8  # Tracker details, data conversion
+    ALL = -1  # All debugging enabled
 
 
 # =============================================================================
@@ -32,6 +35,7 @@ class DebugLevel(IntFlag):
 # =============================================================================
 class _NullLogger:
     """Drop-in logger used before onStart wires in the real DebugLogger."""
+
     level = 0
 
     def log(self, *a, **k) -> None:
@@ -40,12 +44,18 @@ class _NullLogger:
     def error(self, *a, **k) -> None:
         pass
 
+    def warning(self, *a, **k) -> None:
+        pass
+
 
 class _PassthroughTranslator:
     """Drop-in translator used before onStart wires in the real TranslationManager."""
 
     def get_working_mode_status(self, key: str) -> str:
         return key
+
+    def translate_selector_options(self, options: list) -> str:
+        return "|".join(options)
 
 
 # Module-level state: replaced by plugin.onStart() with live objects.
