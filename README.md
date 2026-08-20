@@ -486,6 +486,12 @@ sudo systemctl start domoticz
 - Gated converters check compressor frequency before reporting values (temperature difference converters also pass during passive cooling)
 - Translations use `spec_id` as the lookup key
 
+## Support
+
+Building tools that solve my own problems and sharing them in the hope they solve yours too. This one saves you the evening of decoding raw Luxtronik registers by hand before your heat pump shows up in Domoticz.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O0W221GBUG)
+
 ## Changelog
 
 ### Version 2.1.2

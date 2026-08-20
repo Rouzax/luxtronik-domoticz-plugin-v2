@@ -536,6 +536,14 @@ img { max-width: 100%; height: auto; display: block; }
 
 .footer__links a:hover { color: var(--accent); }
 
+.footer__links a.footer__support {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
 .footer__version {
     font-family: var(--font-mono);
     font-size: 0.8rem;
@@ -544,4 +552,5 @@ img { max-width: 100%; height: auto; display: block; }
 
 @media (max-width: 640px) {
     .footer__content { flex-direction: column; text-align: center; }
+    .footer__links { flex-wrap: wrap; justify-content: center; }
 }
